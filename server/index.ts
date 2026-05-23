@@ -334,22 +334,6 @@ app.get("/api/citizen/:citizenId/orders", async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 
-async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const { setupVite } = await import("./vite-middleware.js");
-    await setupVite(app);
-  } else {
-    const { default: expressStatic } = await import("express");
-    const { default: path } = await import("path");
-    app.use(expressStatic.static(path.resolve(process.cwd(), "dist/public")));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.resolve(process.cwd(), "dist/public/index.html"));
-    });
-  }
-
-  app.listen(PORT, "0.0.0.0", () => console.log(`Server running on port ${PORT}`));
-}
-
-startServer();
+app.listen(PORT, "0.0.0.0", () => console.log(`API server running on port ${PORT}`));
