@@ -62,8 +62,8 @@ export default function MapView() {
       });
 
       const map = L.map(mapDivRef.current, {
-        center: [35.5, 37.5],
-        zoom: 7,
+        center: [31.42, 34.37],
+        zoom: 11,
         zoomControl: true,
       });
 

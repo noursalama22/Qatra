@@ -41,12 +41,34 @@ app.get("/api/ngos", async (_req, res) => {
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+app.patch("/api/ngos/:id", async (req, res) => {
+  try {
+    const [updated] = await db.update(ngosTable)
+      .set({ status: req.body.status, updatedAt: new Date() })
+      .where(eq(ngosTable.id, req.params.id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 // ── Providers ──────────────────────────────────────────────────────────────
 
 app.get("/api/providers", async (_req, res) => {
   try {
     const data = await db.select().from(providersTable).orderBy(providersTable.createdAt);
     res.json({ data, total: data.length });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.patch("/api/providers/:id", async (req, res) => {
+  try {
+    const [updated] = await db.update(providersTable)
+      .set({ status: req.body.status, updatedAt: new Date() })
+      .where(eq(providersTable.id, req.params.id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
@@ -114,6 +136,17 @@ app.get("/api/orders", async (_req, res) => {
   try {
     const data = await db.select().from(deliveryOrdersTable).orderBy(deliveryOrdersTable.createdAt);
     res.json({ data, total: data.length });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.patch("/api/orders/:id", async (req, res) => {
+  try {
+    const [updated] = await db.update(deliveryOrdersTable)
+      .set({ status: req.body.status, updatedAt: new Date() })
+      .where(eq(deliveryOrdersTable.id, req.params.id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 

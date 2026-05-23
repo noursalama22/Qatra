@@ -1,95 +1,125 @@
 import { useState } from "react";
-import Dashboard from "./pages/Dashboard";
-import Zones from "./pages/Zones";
-import Tasks from "./pages/Tasks";
-import Drivers from "./pages/Drivers";
-import Ngos from "./pages/Ngos";
-import Providers from "./pages/Providers";
-import Orders from "./pages/Orders";
+import AdminPortal from "./pages/AdminPortal";
+import NgoPortal from "./pages/NgoPortal";
+import ProviderPortal from "./pages/ProviderPortal";
+import DriverPortal from "./pages/DriverPortal";
 import Citizen from "./pages/Citizen";
 import MapView from "./pages/MapView";
 
-type Page = "citizen" | "map" | "dashboard" | "zones" | "tasks" | "drivers" | "ngos" | "providers" | "orders";
+type Role = "admin" | "ngo" | "provider" | "driver" | "citizen";
 
-const navItems: { id: Page; label: string; icon: string; section?: string }[] = [
-  { id: "citizen",   label: "بوابة المواطن",  icon: "👤", section: "المواطن"  },
-  { id: "map",       label: "الخريطة الحية",  icon: "🗺️", section: "الإدارة" },
-  { id: "dashboard", label: "لوحة التحكم",    icon: "📊"                       },
-  { id: "zones",     label: "مناطق التغطية",  icon: "📍"                       },
-  { id: "tasks",     label: "مهام التوزيع",   icon: "📋"                       },
-  { id: "orders",    label: "طلبات التوصيل",  icon: "📦"                       },
-  { id: "drivers",   label: "السائقون",       icon: "👷", section: " "         },
-  { id: "ngos",      label: "المنظمات",        icon: "🏢"                       },
-  { id: "providers", label: "مزودو الخدمة",   icon: "🚚"                       },
+const ROLES: { id: Role; icon: string; label: string; color: string }[] = [
+  { id: "admin",    icon: "🛡",  label: "المشرف",  color: "#1e40af" },
+  { id: "ngo",      icon: "❤️", label: "المنظمة",  color: "#059669" },
+  { id: "provider", icon: "🏢", label: "المزود",   color: "#7c3aed" },
+  { id: "driver",   icon: "🚚", label: "السائق",   color: "#92400e" },
+  { id: "citizen",  icon: "👤", label: "المواطن",  color: "#0369a1" },
 ];
 
-const pageTitles: Record<Page, string> = {
-  citizen:   "بوابة المواطن",
-  map:       "الخريطة الحية",
-  dashboard: "Dashboard",
-  zones:     "Coverage Zones",
-  tasks:     "Distribution Tasks",
-  drivers:   "Drivers",
-  ngos:      "NGO Partners",
-  providers: "Service Providers",
-  orders:    "Delivery Orders",
+const ROLE_NAV: Record<Role, { id: string; label: string; icon: string }[]> = {
+  admin:    [
+    { id: "main", label: "لوحة الإشراف", icon: "🛡" },
+    { id: "map",  label: "الخريطة الحية", icon: "🗺️" },
+  ],
+  ngo:      [
+    { id: "main", label: "بوابة المنظمة", icon: "❤️" },
+    { id: "map",  label: "الخريطة الحية", icon: "🗺️" },
+  ],
+  provider: [
+    { id: "main", label: "بوابة المزود",   icon: "🏢" },
+    { id: "map",  label: "الخريطة الحية", icon: "🗺️" },
+  ],
+  driver:   [
+    { id: "main", label: "مهامي",          icon: "🚚" },
+    { id: "map",  label: "خريطة الطريق",  icon: "🗺️" },
+  ],
+  citizen:  [
+    { id: "main", label: "بوابة المواطن", icon: "👤" },
+  ],
+};
+
+const ROLE_DESCRIPTIONS: Record<Role, string> = {
+  admin:    "موافقة على الأطراف · إعدادات النظام",
+  ngo:      "مناطق التغطية · مهام التوزيع",
+  provider: "وضع إنساني + تجاري · إدارة الأسطول",
+  driver:   "تنفيذ التوصيل · دليل الاستلام",
+  citizen:  "إشارة الاحتياج · الطلبات التجارية",
 };
 
 export default function App() {
-  const [page, setPage] = useState<Page>("map");
+  const [role, setRole] = useState<Role>("citizen");
+  const [page, setPage] = useState<"main" | "map">("main");
+
+  const currentRole = ROLES.find(r => r.id === role)!;
 
   const renderPage = () => {
-    switch (page) {
-      case "citizen":   return <Citizen />;
-      case "map":       return <MapView />;
-      case "dashboard": return <Dashboard />;
-      case "zones":     return <Zones />;
-      case "tasks":     return <Tasks />;
-      case "drivers":   return <Drivers />;
-      case "ngos":      return <Ngos />;
-      case "providers": return <Providers />;
-      case "orders":    return <Orders />;
+    if (page === "map") return <MapView />;
+    switch (role) {
+      case "admin":    return <AdminPortal />;
+      case "ngo":      return <NgoPortal />;
+      case "provider": return <ProviderPortal />;
+      case "driver":   return <DriverPortal />;
+      case "citizen":  return <Citizen />;
     }
   };
 
-  const noHeader = page === "citizen" || page === "map";
-
   return (
-    <div className="layout">
+    <div className="layout" dir="rtl">
       <aside className="sidebar">
         <div className="sidebar-logo">
           <h1>💧 Qatra v3</h1>
-          <span>Water Delivery Platform</span>
+          <span>منصة توزيع المياه</span>
         </div>
-        <nav className="sidebar-nav">
-          {navItems.map((item) => (
-            <div key={item.id}>
-              {item.section && <div className="nav-section-label">{item.section}</div>}
+
+        {/* Role Switcher */}
+        <div className="role-switcher">
+          <div className="role-switcher-label">اختر دورك</div>
+          <div className="role-grid">
+            {ROLES.map(r => (
               <button
-                className={`nav-item ${page === item.id ? "active" : ""}`}
-                onClick={() => setPage(item.id)}
+                key={r.id}
+                className={`role-btn ${role === r.id ? "role-btn-active" : ""}`}
+                style={role === r.id ? { background: r.color, color: "white", borderColor: r.color } : {}}
+                onClick={() => { setRole(r.id); setPage("main"); }}
+                title={r.label}
               >
-                <span className="nav-icon">{item.icon}</span>
-                {item.label}
+                <span className="role-btn-icon">{r.icon}</span>
+                <span className="role-btn-label">{r.label}</span>
               </button>
-            </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Current Role Info */}
+        <div className="current-role-info" style={{ borderColor: currentRole.color + "44" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 18 }}>{currentRole.icon}</span>
+            <span style={{ fontWeight: 700, fontSize: 13, color: "white" }}>{currentRole.label}</span>
+          </div>
+          <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.4 }}>{ROLE_DESCRIPTIONS[role]}</div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="sidebar-nav" style={{ marginTop: 8 }}>
+          {ROLE_NAV[role].map(item => (
+            <button
+              key={item.id}
+              className={`nav-item ${page === item.id ? "active" : ""}`}
+              onClick={() => setPage(item.id as "main" | "map")}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              {item.label}
+            </button>
           ))}
         </nav>
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #334155" }}>
-          <div style={{ fontSize: 11, color: "#475569", marginBottom: 4 }}>Demo Mode</div>
-          <div style={{ fontSize: 12, color: "#64748b" }}>PostgreSQL · No auth</div>
+
+        <div style={{ marginTop: "auto", padding: "16px 20px", borderTop: "1px solid #334155" }}>
+          <div style={{ fontSize: 11, color: "#475569", marginBottom: 2 }}>وضع Demo · لا يوجد تسجيل دخول</div>
+          <div style={{ fontSize: 11, color: "#334155" }}>PostgreSQL · Qatra v3 MVP</div>
         </div>
       </aside>
 
       <div className="main" style={page === "map" ? { display: "flex", flexDirection: "column" } : {}}>
-        {!noHeader && (
-          <header className="topbar">
-            <h2>{pageTitles[page]}</h2>
-            <div className="topbar-right">
-              <span className="badge-demo">🎯 Demo</span>
-            </div>
-          </header>
-        )}
         {renderPage()}
       </div>
     </div>
