@@ -712,7 +712,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .ph-lbl { font-size: 11px; opacity: 0.7; }
 .ph-divider { width: 1px; height: 36px; background: rgba(255,255,255,0.2); }
 
-.portal-tabs { display: flex; gap: 0; background: white; border-bottom: 2px solid #e2e8f0; padding: 0 24px; position: sticky; top: 0; z-index: 10; }
+.portal-tabs { display: flex; gap: 0; background: white; border-bottom: 2px solid #e2e8f0; padding: 0 24px; position: sticky; top: 0; z-index: 10; overflow-x: auto; flex-wrap: nowrap; }
 .ptab { padding: 14px 20px; font-size: 14px; font-weight: 600; color: #64748b; border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.15s; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
 .ptab:hover { color: #1e293b; }
 .ptab-active { color: #2563eb; border-bottom-color: #2563eb; }

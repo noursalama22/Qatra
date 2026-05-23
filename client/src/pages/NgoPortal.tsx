@@ -277,7 +277,7 @@ export default function NgoPortal() {
         </button>
       </div>
 
-      <div className="portal-body" style={{ padding: tab === "dashboard" ? 0 : undefined, maxWidth: tab === "dashboard" ? "none" : undefined }}>
+      <div className="portal-body" style={{ padding: (tab === "dashboard" || tab === "schedule") ? 0 : undefined, maxWidth: (tab === "dashboard" || tab === "schedule") ? "none" : undefined }}>
 
         {/* ════════════════════════════════════════
             TAB 1 · DASHBOARD — MAP + PRIORITY TABLE
