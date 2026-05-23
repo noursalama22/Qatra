@@ -4,8 +4,10 @@
   "main": "index.js",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "tsx server/index.ts",
-    "client": "cd client && npx vite"
+    "server": "tsx --tsconfig tsconfig.json server/index.ts",
+    "client": "cd client && npx vite",
+    "db:push": "drizzle-kit push --config drizzle.config.ts",
+    "db:seed": "tsx --tsconfig tsconfig.json server/seed.ts"
   },
   "keywords": [],
   "author": "",
@@ -18,14 +20,20 @@
     "@types/passport": "^1.0.17",
     "concurrently": "^9.2.1",
     "connect-pg-simple": "^10.0.0",
+    "drizzle-orm": "^0.45.2",
+    "drizzle-zod": "^0.8.3",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "memoizee": "^0.4.17",
     "openid-client": "^6.8.4",
     "passport": "^0.7.0",
-    "tsx": "^4.22.3"
+    "pg": "^8.21.0",
+    "tsx": "^4.22.3",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/express": "^5.0.6"
+    "@types/express": "^5.0.6",
+    "@types/pg": "^8.20.0",
+    "drizzle-kit": "^0.31.10"
   }
 }

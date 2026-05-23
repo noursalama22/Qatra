@@ -1,0 +1,320 @@
+CREATE SCHEMA "public";
+CREATE TYPE "application_status" AS ENUM('pending', 'approved', 'rejected');
+CREATE TYPE "delivery_chain" AS ENUM('humanitarian', 'commercial');
+CREATE TYPE "driver_status" AS ENUM('pending', 'active', 'inactive', 'rejected');
+CREATE TYPE "driver_task_status" AS ENUM('pending', 'invitation_pending', 'in_progress', 'delivered', 'rejected');
+CREATE TYPE "driver_type" AS ENUM('owned', 'independent');
+CREATE TYPE "invitation_status" AS ENUM('pending', 'accepted', 'rejected', 'expired');
+CREATE TYPE "notification_type" AS ENUM('driver_assigned', 'driver_en_route', 'delivery_complete', 'task_assigned', 'order_placed', 'proof_submitted', 'application_approved', 'application_rejected', 'performance_alert', 'task_invitation', 'route_updated');
+CREATE TYPE "order_status" AS ENUM('pending', 'dispatched', 'delivered', 'cancelled');
+CREATE TYPE "provider_task_status" AS ENUM('pending', 'acknowledged', 'in_progress', 'delivered');
+CREATE TYPE "subscription_frequency" AS ENUM('weekly', 'biweekly', 'monthly');
+CREATE TYPE "subscription_status" AS ENUM('active', 'cancelled', 'paused');
+CREATE TYPE "task_status" AS ENUM('pending', 'in_progress', 'delivered', 'cancelled');
+CREATE TYPE "user_role" AS ENUM('admin', 'ngo', 'provider', 'driver', 'citizen');
+CREATE TYPE "zone_status" AS ENUM('active', 'inactive');
+CREATE TYPE "payment_related_type" AS ENUM('delivery_order', 'subscription');
+CREATE TYPE "payment_status" AS ENUM('pending', 'completed', 'failed', 'refunded');
+CREATE TABLE "audit_log" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"actor_id" varchar NOT NULL,
+	"actor_role" varchar(50),
+	"action" varchar(255) NOT NULL,
+	"entity_type" varchar(100) NOT NULL,
+	"entity_id" varchar,
+	"metadata" jsonb,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "citizens" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"user_id" varchar NOT NULL,
+	"zone_id" varchar NOT NULL,
+	"lat" numeric(10, 7),
+	"lng" numeric(10, 7),
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "delivery_orders" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"citizen_id" varchar NOT NULL,
+	"provider_id" varchar NOT NULL,
+	"status" order_status DEFAULT 'pending' NOT NULL,
+	"quantity_liters" numeric(10, 2),
+	"total_amount" numeric(10, 2),
+	"task_id" varchar,
+	"mock_payment_token" varchar(255),
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "delivery_proofs" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"task_id" varchar NOT NULL,
+	"photo_url" varchar(1024) NOT NULL,
+	"signature_url" varchar(1024),
+	"notes" text,
+	"submitted_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "distribution_tasks" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"ngo_id" varchar NOT NULL,
+	"zone_id" varchar NOT NULL,
+	"status" task_status DEFAULT 'pending' NOT NULL,
+	"quantity_liters" numeric(10, 2) NOT NULL,
+	"scheduled_at" timestamp with time zone NOT NULL,
+	"assigned_provider_ids" jsonb DEFAULT '[]' NOT NULL,
+	"notes" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "driver_invitations" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"task_id" varchar NOT NULL,
+	"driver_identifier" varchar(255) NOT NULL,
+	"driver_id" varchar,
+	"status" invitation_status DEFAULT 'pending' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "driver_tasks" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"driver_id" varchar NOT NULL,
+	"provider_ngo_task_id" varchar,
+	"order_id" varchar,
+	"task_type" delivery_chain NOT NULL,
+	"status" driver_task_status DEFAULT 'pending' NOT NULL,
+	"zone_id" varchar,
+	"provider_id" varchar,
+	"scheduled_at" timestamp with time zone,
+	"quantity_liters" numeric(10, 2),
+	"route_data" jsonb,
+	"started_at" timestamp with time zone,
+	"delivered_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "drivers" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"user_id" varchar NOT NULL,
+	"driver_type" driver_type NOT NULL,
+	"provider_id" varchar,
+	"status" driver_status DEFAULT 'pending' NOT NULL,
+	"phone" varchar(50),
+	"vehicle_type" varchar(100),
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "gps_positions" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"driver_id" varchar NOT NULL,
+	"task_id" varchar,
+	"lat" numeric(10, 7) NOT NULL,
+	"lng" numeric(10, 7) NOT NULL,
+	"accuracy" numeric(8, 2),
+	"recorded_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "ngos" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"user_id" varchar NOT NULL,
+	"org_name" varchar(255) NOT NULL,
+	"contact_email" varchar(255),
+	"country" varchar(100),
+	"description" text,
+	"status" application_status DEFAULT 'pending' NOT NULL,
+	"rejection_reason" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "notifications" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"user_id" varchar NOT NULL,
+	"type" notification_type NOT NULL,
+	"message" text NOT NULL,
+	"entity_id" varchar,
+	"entity_type" varchar(100),
+	"read" boolean DEFAULT false NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "payments" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"user_id" varchar NOT NULL,
+	"amount" numeric(10, 2) NOT NULL,
+	"currency" varchar(10) DEFAULT 'USD' NOT NULL,
+	"status" payment_status DEFAULT 'pending' NOT NULL,
+	"related_type" payment_related_type,
+	"related_id" varchar,
+	"mock_payment_token" varchar,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "provider_ngo_tasks" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"distribution_task_id" varchar NOT NULL,
+	"provider_id" varchar NOT NULL,
+	"status" provider_task_status DEFAULT 'pending' NOT NULL,
+	"assigned_driver_id" varchar,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "providers" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"user_id" varchar NOT NULL,
+	"company_name" varchar(255) NOT NULL,
+	"contact_email" varchar(255),
+	"description" text,
+	"status" application_status DEFAULT 'pending' NOT NULL,
+	"rejection_reason" text,
+	"operating_modes" jsonb DEFAULT '[]' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "sessions" (
+	"sid" varchar PRIMARY KEY,
+	"sess" jsonb NOT NULL,
+	"expire" timestamp NOT NULL
+);
+CREATE TABLE "signals" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"citizen_id" varchar NOT NULL,
+	"zone_id" varchar NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "subscriptions" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"citizen_id" varchar NOT NULL,
+	"provider_id" varchar NOT NULL,
+	"plan_name" varchar(100) NOT NULL,
+	"price_per_delivery" numeric(10, 2),
+	"frequency" subscription_frequency,
+	"status" subscription_status DEFAULT 'active' NOT NULL,
+	"mock_payment_token" varchar(255),
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "system_config" (
+	"id" varchar PRIMARY KEY DEFAULT 'default',
+	"signal_density_weight" numeric(5, 2) DEFAULT '0.5' NOT NULL,
+	"days_since_delivery_weight" numeric(5, 2) DEFAULT '0.3' NOT NULL,
+	"population_weight" numeric(5, 2) DEFAULT '0.2' NOT NULL,
+	"signal_threshold" integer DEFAULT 10 NOT NULL,
+	"platform_fee_percent" numeric(5, 2) DEFAULT '5.0' NOT NULL,
+	"auto_escalation_days" integer DEFAULT 3 NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "user_roles" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"user_id" varchar NOT NULL,
+	"role" user_role NOT NULL,
+	"status" application_status DEFAULT 'approved' NOT NULL,
+	"profile_id" varchar,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "users" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"email" varchar CONSTRAINT "users_email_unique" UNIQUE,
+	"first_name" varchar,
+	"last_name" varchar,
+	"profile_image_url" varchar,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "zones" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+	"ngo_id" varchar NOT NULL,
+	"name" varchar(255) NOT NULL,
+	"description" text,
+	"boundary" jsonb,
+	"population_estimate" integer,
+	"status" zone_status DEFAULT 'active' NOT NULL,
+	"signal_count" integer DEFAULT 0 NOT NULL,
+	"last_delivery_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_actor_id_users_id_fk" FOREIGN KEY ("actor_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "citizens" ADD CONSTRAINT "citizens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "delivery_orders" ADD CONSTRAINT "delivery_orders_citizen_id_citizens_id_fk" FOREIGN KEY ("citizen_id") REFERENCES "citizens"("id") ON DELETE CASCADE;
+ALTER TABLE "delivery_orders" ADD CONSTRAINT "delivery_orders_provider_id_providers_id_fk" FOREIGN KEY ("provider_id") REFERENCES "providers"("id") ON DELETE CASCADE;
+ALTER TABLE "delivery_orders" ADD CONSTRAINT "delivery_orders_task_id_driver_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "driver_tasks"("id") ON DELETE SET NULL;
+ALTER TABLE "delivery_proofs" ADD CONSTRAINT "delivery_proofs_task_id_driver_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "driver_tasks"("id") ON DELETE CASCADE;
+ALTER TABLE "distribution_tasks" ADD CONSTRAINT "distribution_tasks_ngo_id_ngos_id_fk" FOREIGN KEY ("ngo_id") REFERENCES "ngos"("id") ON DELETE CASCADE;
+ALTER TABLE "distribution_tasks" ADD CONSTRAINT "distribution_tasks_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "zones"("id") ON DELETE CASCADE;
+ALTER TABLE "driver_invitations" ADD CONSTRAINT "driver_invitations_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "drivers"("id") ON DELETE SET NULL;
+ALTER TABLE "driver_invitations" ADD CONSTRAINT "driver_invitations_task_id_provider_ngo_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "provider_ngo_tasks"("id") ON DELETE CASCADE;
+ALTER TABLE "driver_tasks" ADD CONSTRAINT "driver_tasks_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "drivers"("id") ON DELETE CASCADE;
+ALTER TABLE "driver_tasks" ADD CONSTRAINT "driver_tasks_provider_id_providers_id_fk" FOREIGN KEY ("provider_id") REFERENCES "providers"("id") ON DELETE SET NULL;
+ALTER TABLE "driver_tasks" ADD CONSTRAINT "driver_tasks_provider_ngo_task_id_provider_ngo_tasks_id_fk" FOREIGN KEY ("provider_ngo_task_id") REFERENCES "provider_ngo_tasks"("id") ON DELETE SET NULL;
+ALTER TABLE "driver_tasks" ADD CONSTRAINT "driver_tasks_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "zones"("id") ON DELETE SET NULL;
+ALTER TABLE "drivers" ADD CONSTRAINT "drivers_provider_id_providers_id_fk" FOREIGN KEY ("provider_id") REFERENCES "providers"("id") ON DELETE SET NULL;
+ALTER TABLE "drivers" ADD CONSTRAINT "drivers_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "gps_positions" ADD CONSTRAINT "gps_positions_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "drivers"("id") ON DELETE CASCADE;
+ALTER TABLE "gps_positions" ADD CONSTRAINT "gps_positions_task_id_driver_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "driver_tasks"("id") ON DELETE SET NULL;
+ALTER TABLE "ngos" ADD CONSTRAINT "ngos_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "payments" ADD CONSTRAINT "payments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "provider_ngo_tasks" ADD CONSTRAINT "provider_ngo_tasks_assigned_driver_id_drivers_id_fk" FOREIGN KEY ("assigned_driver_id") REFERENCES "drivers"("id") ON DELETE SET NULL;
+ALTER TABLE "provider_ngo_tasks" ADD CONSTRAINT "provider_ngo_tasks_distribution_task_id_distribution_tasks_id_f" FOREIGN KEY ("distribution_task_id") REFERENCES "distribution_tasks"("id") ON DELETE CASCADE;
+ALTER TABLE "provider_ngo_tasks" ADD CONSTRAINT "provider_ngo_tasks_provider_id_providers_id_fk" FOREIGN KEY ("provider_id") REFERENCES "providers"("id") ON DELETE CASCADE;
+ALTER TABLE "providers" ADD CONSTRAINT "providers_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "signals" ADD CONSTRAINT "signals_citizen_id_citizens_id_fk" FOREIGN KEY ("citizen_id") REFERENCES "citizens"("id") ON DELETE CASCADE;
+ALTER TABLE "signals" ADD CONSTRAINT "signals_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "zones"("id") ON DELETE CASCADE;
+ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_citizen_id_citizens_id_fk" FOREIGN KEY ("citizen_id") REFERENCES "citizens"("id") ON DELETE CASCADE;
+ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_provider_id_providers_id_fk" FOREIGN KEY ("provider_id") REFERENCES "providers"("id") ON DELETE CASCADE;
+ALTER TABLE "user_roles" ADD CONSTRAINT "user_roles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "zones" ADD CONSTRAINT "zones_ngo_id_ngos_id_fk" FOREIGN KEY ("ngo_id") REFERENCES "ngos"("id") ON DELETE CASCADE;
+CREATE UNIQUE INDEX "audit_log_pkey" ON "audit_log" ("id");
+CREATE INDEX "idx_audit_log_actor_id" ON "audit_log" ("actor_id");
+CREATE INDEX "idx_audit_log_created_at" ON "audit_log" ("created_at");
+CREATE UNIQUE INDEX "citizens_pkey" ON "citizens" ("id");
+CREATE INDEX "idx_citizens_user_id" ON "citizens" ("user_id");
+CREATE INDEX "idx_citizens_zone_id" ON "citizens" ("zone_id");
+CREATE UNIQUE INDEX "delivery_orders_pkey" ON "delivery_orders" ("id");
+CREATE INDEX "idx_orders_citizen_id" ON "delivery_orders" ("citizen_id");
+CREATE INDEX "idx_orders_provider_id" ON "delivery_orders" ("provider_id");
+CREATE INDEX "idx_orders_status" ON "delivery_orders" ("status");
+CREATE UNIQUE INDEX "delivery_proofs_pkey" ON "delivery_proofs" ("id");
+CREATE INDEX "idx_proofs_task_id" ON "delivery_proofs" ("task_id");
+CREATE UNIQUE INDEX "distribution_tasks_pkey" ON "distribution_tasks" ("id");
+CREATE INDEX "idx_distribution_tasks_ngo_id" ON "distribution_tasks" ("ngo_id");
+CREATE INDEX "idx_distribution_tasks_zone_id" ON "distribution_tasks" ("zone_id");
+CREATE UNIQUE INDEX "driver_invitations_pkey" ON "driver_invitations" ("id");
+CREATE INDEX "idx_invitations_task_id" ON "driver_invitations" ("task_id");
+CREATE UNIQUE INDEX "driver_tasks_pkey" ON "driver_tasks" ("id");
+CREATE INDEX "idx_driver_tasks_driver_id" ON "driver_tasks" ("driver_id");
+CREATE INDEX "idx_driver_tasks_status" ON "driver_tasks" ("status");
+CREATE UNIQUE INDEX "drivers_pkey" ON "drivers" ("id");
+CREATE INDEX "idx_drivers_provider_id" ON "drivers" ("provider_id");
+CREATE INDEX "idx_drivers_user_id" ON "drivers" ("user_id");
+CREATE UNIQUE INDEX "gps_positions_pkey" ON "gps_positions" ("id");
+CREATE INDEX "idx_gps_driver_id" ON "gps_positions" ("driver_id");
+CREATE INDEX "idx_gps_recorded_at" ON "gps_positions" ("recorded_at");
+CREATE INDEX "idx_ngos_user_id" ON "ngos" ("user_id");
+CREATE UNIQUE INDEX "ngos_pkey" ON "ngos" ("id");
+CREATE INDEX "idx_notifications_read" ON "notifications" ("read");
+CREATE INDEX "idx_notifications_user_id" ON "notifications" ("user_id");
+CREATE UNIQUE INDEX "notifications_pkey" ON "notifications" ("id");
+CREATE INDEX "idx_payments_related" ON "payments" ("related_type","related_id");
+CREATE INDEX "idx_payments_status" ON "payments" ("status");
+CREATE INDEX "idx_payments_user_id" ON "payments" ("user_id");
+CREATE UNIQUE INDEX "payments_pkey" ON "payments" ("id");
+CREATE INDEX "idx_provider_ngo_tasks_dist_task_id" ON "provider_ngo_tasks" ("distribution_task_id");
+CREATE INDEX "idx_provider_ngo_tasks_provider_id" ON "provider_ngo_tasks" ("provider_id");
+CREATE UNIQUE INDEX "provider_ngo_tasks_pkey" ON "provider_ngo_tasks" ("id");
+CREATE INDEX "idx_providers_user_id" ON "providers" ("user_id");
+CREATE UNIQUE INDEX "providers_pkey" ON "providers" ("id");
+CREATE INDEX "IDX_session_expire" ON "sessions" ("expire");
+CREATE UNIQUE INDEX "sessions_pkey" ON "sessions" ("sid");
+CREATE INDEX "idx_signals_citizen_id" ON "signals" ("citizen_id");
+CREATE INDEX "idx_signals_created_at" ON "signals" ("created_at");
+CREATE INDEX "idx_signals_zone_id" ON "signals" ("zone_id");
+CREATE UNIQUE INDEX "signals_pkey" ON "signals" ("id");
+CREATE INDEX "idx_subscriptions_citizen_id" ON "subscriptions" ("citizen_id");
+CREATE INDEX "idx_subscriptions_provider_id" ON "subscriptions" ("provider_id");
+CREATE UNIQUE INDEX "subscriptions_pkey" ON "subscriptions" ("id");
+CREATE UNIQUE INDEX "system_config_pkey" ON "system_config" ("id");
+CREATE INDEX "idx_user_roles_role" ON "user_roles" ("role");
+CREATE UNIQUE INDEX "uq_user_roles_user_id" ON "user_roles" ("user_id");
+CREATE UNIQUE INDEX "user_roles_pkey" ON "user_roles" ("id");
+CREATE UNIQUE INDEX "users_email_unique" ON "users" ("email");
+CREATE UNIQUE INDEX "users_pkey" ON "users" ("id");
+CREATE INDEX "idx_zones_ngo_id" ON "zones" ("ngo_id");
+CREATE UNIQUE INDEX "zones_pkey" ON "zones" ("id");
