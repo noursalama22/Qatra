@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx --tsconfig tsconfig.json server/index.ts",
-    "db:push": "drizzle-kit push --config drizzle.config.ts",
-    "db:seed": "tsx --tsconfig tsconfig.json server/seed.ts"
+    "dev:server": "node_modules/.bin/tsx --tsconfig tsconfig.json server/index.ts",
+    "dev:client": "cd client && node_modules/.bin/vite",
+    "dev": "node_modules/.bin/concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "db:push": "node_modules/.bin/drizzle-kit push --config drizzle.config.ts",
+    "db:seed": "node_modules/.bin/tsx --tsconfig tsconfig.json server/seed.ts"
   },
   "keywords": [],
   "author": "",
@@ -15,6 +17,7 @@
     "@types/connect-pg-simple": "^7.0.3",
     "@types/express-session": "^1.19.0",
     "@types/memoizee": "^0.4.12",
+    "@types/node": "^25.9.1",
     "@types/passport": "^1.0.17",
     "concurrently": "^9.2.1",
     "connect-pg-simple": "^10.0.0",
@@ -27,6 +30,7 @@
     "passport": "^0.7.0",
     "pg": "^8.21.0",
     "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
