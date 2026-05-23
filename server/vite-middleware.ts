@@ -8,6 +8,7 @@ export async function setupVite(app: Express) {
     server: {
       middlewareMode: true,
       hmr: { port: 5001 },
+      allowedHosts: true,
       headers: {
         "X-Frame-Options": "",
         "Content-Security-Policy": "frame-ancestors *",
