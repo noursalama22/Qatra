@@ -7,37 +7,41 @@ import Ngos from "./pages/Ngos";
 import Providers from "./pages/Providers";
 import Orders from "./pages/Orders";
 import Citizen from "./pages/Citizen";
+import MapView from "./pages/MapView";
 
-type Page = "citizen" | "dashboard" | "zones" | "tasks" | "drivers" | "ngos" | "providers" | "orders";
+type Page = "citizen" | "map" | "dashboard" | "zones" | "tasks" | "drivers" | "ngos" | "providers" | "orders";
 
 const navItems: { id: Page; label: string; icon: string; section?: string }[] = [
-  { id: "citizen", label: "بوابة المواطن", icon: "👤", section: "المواطن" },
-  { id: "dashboard", label: "لوحة التحكم", icon: "📊", section: "الإدارة" },
-  { id: "zones", label: "مناطق التغطية", icon: "🗺️" },
-  { id: "tasks", label: "مهام التوزيع", icon: "📋" },
-  { id: "orders", label: "طلبات التوصيل", icon: "📦" },
-  { id: "drivers", label: "السائقون", icon: "👷", section: " " },
-  { id: "ngos", label: "المنظمات", icon: "🏢" },
-  { id: "providers", label: "مزودو الخدمة", icon: "🚚" },
+  { id: "citizen",   label: "بوابة المواطن",  icon: "👤", section: "المواطن"  },
+  { id: "map",       label: "الخريطة الحية",  icon: "🗺️", section: "الإدارة" },
+  { id: "dashboard", label: "لوحة التحكم",    icon: "📊"                       },
+  { id: "zones",     label: "مناطق التغطية",  icon: "📍"                       },
+  { id: "tasks",     label: "مهام التوزيع",   icon: "📋"                       },
+  { id: "orders",    label: "طلبات التوصيل",  icon: "📦"                       },
+  { id: "drivers",   label: "السائقون",       icon: "👷", section: " "         },
+  { id: "ngos",      label: "المنظمات",        icon: "🏢"                       },
+  { id: "providers", label: "مزودو الخدمة",   icon: "🚚"                       },
 ];
 
 const pageTitles: Record<Page, string> = {
-  citizen: "بوابة المواطن",
+  citizen:   "بوابة المواطن",
+  map:       "الخريطة الحية",
   dashboard: "Dashboard",
-  zones: "Coverage Zones",
-  tasks: "Distribution Tasks",
-  drivers: "Drivers",
-  ngos: "NGO Partners",
+  zones:     "Coverage Zones",
+  tasks:     "Distribution Tasks",
+  drivers:   "Drivers",
+  ngos:      "NGO Partners",
   providers: "Service Providers",
-  orders: "Delivery Orders",
+  orders:    "Delivery Orders",
 };
 
 export default function App() {
-  const [page, setPage] = useState<Page>("citizen");
+  const [page, setPage] = useState<Page>("map");
 
   const renderPage = () => {
     switch (page) {
       case "citizen":   return <Citizen />;
+      case "map":       return <MapView />;
       case "dashboard": return <Dashboard />;
       case "zones":     return <Zones />;
       case "tasks":     return <Tasks />;
@@ -47,6 +51,8 @@ export default function App() {
       case "orders":    return <Orders />;
     }
   };
+
+  const noHeader = page === "citizen" || page === "map";
 
   return (
     <div className="layout">
@@ -58,9 +64,7 @@ export default function App() {
         <nav className="sidebar-nav">
           {navItems.map((item) => (
             <div key={item.id}>
-              {item.section && (
-                <div className="nav-section-label">{item.section}</div>
-              )}
+              {item.section && <div className="nav-section-label">{item.section}</div>}
               <button
                 className={`nav-item ${page === item.id ? "active" : ""}`}
                 onClick={() => setPage(item.id)}
@@ -77,8 +81,8 @@ export default function App() {
         </div>
       </aside>
 
-      <div className="main">
-        {page !== "citizen" && (
+      <div className="main" style={page === "map" ? { display: "flex", flexDirection: "column" } : {}}>
+        {!noHeader && (
           <header className="topbar">
             <h2>{pageTitles[page]}</h2>
             <div className="topbar-right">

@@ -3,9 +3,9 @@ import { db } from "./db";
 import {
   ngosTable, providersTable, driversTable, zonesTable,
   distributionTasksTable, deliveryOrdersTable, usersTable,
-  citizensTable, signalsTable,
+  citizensTable, signalsTable, gpsPositionsTable,
 } from "@shared/schema";
-import { eq, count, sum, sql } from "drizzle-orm";
+import { eq, count, sum, sql, desc } from "drizzle-orm";
 
 const app = express();
 app.use(express.json());
@@ -149,6 +149,79 @@ app.get("/api/stats", async (_req, res) => {
       totalOrders: orders.length,
       totalLitersDispatched: totalLiters,
     });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// ── Map Endpoint ───────────────────────────────────────────────────────────
+
+app.get("/api/map", async (_req, res) => {
+  try {
+    const [zones, tasks, drivers, providers, gpsRows] = await Promise.all([
+      db.select().from(zonesTable),
+      db.select().from(distributionTasksTable),
+      db.select().from(driversTable),
+      db.select().from(providersTable),
+      db.select().from(gpsPositionsTable).orderBy(desc(gpsPositionsTable.recordedAt)),
+    ]);
+
+    // Latest GPS per driver
+    const latestGps: Record<string, typeof gpsRows[0]> = {};
+    for (const g of gpsRows) {
+      if (!latestGps[g.driverId]) latestGps[g.driverId] = g;
+    }
+
+    const centroid = (pts: [number, number][]): [number, number] => {
+      if (!pts || pts.length === 0) return [35.5, 37.5];
+      const lat = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const lng = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      return [lat, lng];
+    };
+
+    const zoneFeatures = zones.map(z => {
+      const boundary = z.boundary as [number, number][] | null;
+      return {
+        id: z.id,
+        name: z.name,
+        status: z.status,
+        populationEstimate: z.populationEstimate ?? 0,
+        signalCount: z.signalCount,
+        lastDeliveryAt: z.lastDeliveryAt,
+        boundary,
+        center: centroid(boundary ?? []),
+        tasks: tasks.filter(t => t.zoneId === z.id).map(t => ({
+          id: t.id, status: t.status,
+          quantityLiters: t.quantityLiters, scheduledAt: t.scheduledAt,
+        })),
+      };
+    });
+
+    const driverFeatures = drivers
+      .filter(d => latestGps[d.id])
+      .map(d => {
+        const gps = latestGps[d.id];
+        const prov = providers.find(p => p.id === d.providerId);
+        const activeTask = tasks.find(t =>
+          t.status === "in_progress" && t.assignedProviderIds?.includes(d.providerId ?? "")
+        ) ?? null;
+        return {
+          id: d.id,
+          vehicleType: d.vehicleType,
+          status: d.status,
+          driverType: d.driverType,
+          providerId: d.providerId,
+          providerName: prov?.companyName ?? null,
+          lat: parseFloat(gps.lat),
+          lng: parseFloat(gps.lng),
+          recordedAt: gps.recordedAt,
+          activeTask: activeTask ? {
+            zoneId: activeTask.zoneId,
+            status: activeTask.status,
+            quantityLiters: activeTask.quantityLiters,
+          } : null,
+        };
+      });
+
+    res.json({ zones: zoneFeatures, drivers: driverFeatures });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
