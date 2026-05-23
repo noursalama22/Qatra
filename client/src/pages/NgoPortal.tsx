@@ -63,8 +63,6 @@ export default function NgoPortal() {
   const [contractDate,     setContractDate]     = useState("");
   const [submitting,       setSubmitting]       = useState(false);
 
-  // Pipeline local state overrides (demo stepper)
-  const [localSteps, setLocalSteps] = useState<Record<string, string>>({});
 
   // Proof of delivery
   const [proofTask,  setProofTask]  = useState<Task | null>(null);
@@ -173,18 +171,6 @@ export default function NgoPortal() {
     setDrawerStep("success");
   };
 
-  const advanceStep = async (task: Task) => {
-    const keys = PIPELINE_STEPS.map(s => s.key);
-    const cur  = localSteps[task.id] ?? task.status;
-    const idx  = keys.indexOf(cur);
-    if (idx >= keys.length - 1) return;
-    const next = keys[idx + 1];
-    if (next === "delivered") {
-      await fetch(`/api/tasks/${task.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "delivered" }) });
-      await load();
-    }
-    setLocalSteps(s => ({ ...s, [task.id]: next }));
-  };
 
   const approveDelivery = (task: Task) => {
     const cost = Number(task.quantityLiters) * 0.45;
@@ -305,7 +291,7 @@ export default function NgoPortal() {
               ? <div className="empty-state"><div style={{fontSize:36,marginBottom:8}}>📋</div><div>لا توجد مهام نشطة حالياً</div><div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>ابدأ بالتعاقد من لوحة التحكم</div></div>
               : activeTasks.map((task, ti) => {
                 const zone     = zones.find(z => z.id === task.zoneId);
-                const curStep  = localSteps[task.id] ?? task.status;
+                const curStep  = task.status;
                 const stepIdx  = PIPELINE_STEPS.findIndex(s => s.key === curStep);
                 const safeIdx  = Math.max(0, stepIdx);
                 const driver   = MOCK_DRIVERS[ti % MOCK_DRIVERS.length];
@@ -355,11 +341,6 @@ export default function NgoPortal() {
                       </span>
                     </div>
 
-                    {safeIdx < 4 && (
-                      <button className="btn btn-outline btn-sm" style={{marginTop:10,fontSize:12}} onClick={()=>advanceStep(task)}>
-                        تقدم المرحلة التالية →
-                      </button>
-                    )}
                   </div>
                 );
               })
