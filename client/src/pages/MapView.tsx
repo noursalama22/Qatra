@@ -46,9 +46,14 @@ export default function MapView() {
 
   // Init map
   useEffect(() => {
-    if (mapRef.current || !mapDivRef.current) return;
+    if (!mapDivRef.current) return;
+    let cancelled = false;
+
     import("leaflet").then(L => {
-      // Fix default icon path
+      if (cancelled || !mapDivRef.current) return;
+      // If a stale map exists on the container, remove it first
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
@@ -56,7 +61,7 @@ export default function MapView() {
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       });
 
-      const map = L.map(mapDivRef.current!, {
+      const map = L.map(mapDivRef.current, {
         center: [35.5, 37.5],
         zoom: 7,
         zoomControl: true,
@@ -71,7 +76,11 @@ export default function MapView() {
       mapRef.current = map;
     });
 
-    return () => { mapRef.current?.remove(); mapRef.current = null; };
+    return () => {
+      cancelled = true;
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+      if (layerRef.current) { layerRef.current = null; }
+    };
   }, []);
 
   // Fetch data on mount and auto-refresh
