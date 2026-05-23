@@ -99,6 +99,46 @@ export default function ProviderPortal() {
                 <div style={{ fontSize: 12, opacity: 0.85 }}>المهام ممولة من المنظمة — المواطن لا يدفع شيئاً</div>
               </div>
             </div>
+            {/* ── Upcoming Agenda ── */}
+            {(() => {
+              const upcoming = ngoTasks
+                .filter(t => t.status === "pending" && new Date(t.scheduledAt) > new Date())
+                .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
+                .slice(0, 4);
+              if (!upcoming.length) return null;
+              return (
+                <div style={{ background:"linear-gradient(135deg,#1e1b4b,#312e81)", borderRadius:14, padding:"16px 18px", marginBottom:18 }}>
+                  <div style={{ color:"rgba(255,255,255,.7)", fontSize:11, fontWeight:700, letterSpacing:.5, marginBottom:12, textTransform:"uppercase" }}>
+                    📅 أجندة العمل القادمة
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                    {upcoming.map(t => {
+                      const zone = zones.find(z => z.id === t.zoneId);
+                      const dt   = new Date(t.scheduledAt);
+                      const isToday = dt.toDateString() === new Date().toDateString();
+                      return (
+                        <div key={t.id} style={{ display:"flex", alignItems:"center", gap:12, background:"rgba(255,255,255,.08)", borderRadius:10, padding:"10px 14px" }}>
+                          <div style={{ background: isToday ? "#f59e0b" : "#818cf8", borderRadius:8, padding:"6px 10px", textAlign:"center", minWidth:46, flexShrink:0 }}>
+                            <div style={{ fontWeight:800, fontSize:18, color:"#fff", lineHeight:1 }}>{dt.getDate()}</div>
+                            <div style={{ fontSize:9, color:"rgba(255,255,255,.8)" }}>{dt.toLocaleDateString("ar-SY",{month:"short"})}</div>
+                          </div>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontWeight:700, fontSize:13, color:"#fff", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                              {zone?.name ?? t.zoneId}
+                            </div>
+                            <div style={{ fontSize:11, color:"rgba(255,255,255,.6)", marginTop:2 }}>
+                              🕐 {dt.toLocaleTimeString("ar-SY",{hour:"2-digit",minute:"2-digit"})} · 💧 {Number(t.quantityLiters).toLocaleString()} لتر
+                            </div>
+                          </div>
+                          {isToday && <span style={{ background:"#f59e0b", color:"#fff", fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:20, whiteSpace:"nowrap" }}>اليوم!</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="tasks-list">
               {ngoTasks.map(t => {
                 const zone = zones.find(z => z.id === t.zoneId);

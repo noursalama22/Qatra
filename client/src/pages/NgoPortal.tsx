@@ -46,8 +46,40 @@ const centroid = (pts: [number, number][]): [number, number] => {
   return [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
 };
 
+// ── Schedule helpers ──────────────────────────────────────────────────────────
+const TIME_SLOTS = [
+  { h: 6,  label: "6 صباحاً"  },
+  { h: 8,  label: "8 صباحاً"  },
+  { h: 10, label: "10 صباحاً" },
+  { h: 12, label: "12 ظهراً"  },
+  { h: 14, label: "2 مساءً"   },
+  { h: 16, label: "4 مساءً"   },
+];
+const AR_DAYS = ["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+
+function getNextDays(n: number): Date[] {
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() + i); d.setHours(0,0,0,0); return d;
+  });
+}
+function dayKey(d: Date): string { return d.toISOString().slice(0, 10); }
+function tasksInSlot(all: Task[], day: Date, slotH: number): Task[] {
+  const dk = dayKey(day);
+  return all.filter(t => {
+    const dt = new Date(t.scheduledAt);
+    return dayKey(dt) === dk && dt.getHours() >= slotH && dt.getHours() < slotH + 2;
+  });
+}
+function slotConflict(all: Task[], zoneId: string, dayStr: string, slotH: number): boolean {
+  return all.some(t => {
+    if (t.zoneId !== zoneId) return false;
+    const dt = new Date(t.scheduledAt);
+    return dayKey(dt) === dayStr && dt.getHours() >= slotH && dt.getHours() < slotH + 2;
+  });
+}
+
 export default function NgoPortal() {
-  const [tab, setTab] = useState<"dashboard" | "pipeline" | "verify">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "pipeline" | "verify" | "schedule">("dashboard");
   const [zones,     setZones]     = useState<Zone[]>([]);
   const [tasks,     setTasks]     = useState<Task[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -67,6 +99,11 @@ export default function NgoPortal() {
   // Proof of delivery
   const [proofTask,  setProofTask]  = useState<Task | null>(null);
   const [proofOpen,  setProofOpen]  = useState(false);
+
+  // Schedule tab state
+  const [scheduleTask, setScheduleTask] = useState<Task | null>(null);
+  const [schedDay,     setSchedDay]     = useState("");
+  const [schedTime,    setSchedTime]    = useState(8);
 
   // Map
   const mapDivRef = useRef<HTMLDivElement>(null);
@@ -184,6 +221,19 @@ export default function NgoPortal() {
   const deliveredTasks = tasks.filter(t => t.status === "delivered");
   const totalSignals = zones.reduce((s, z) => s + (z.signalCount ?? 0), 0);
 
+  const saveSchedule = async () => {
+    if (!scheduleTask || !schedDay) return;
+    const dt = new Date(`${schedDay}T${String(schedTime).padStart(2, "0")}:00:00`);
+    await fetch(`/api/tasks/${scheduleTask.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduledAt: dt.toISOString() }),
+    });
+    await load();
+    setScheduleTask(null); setSchedDay(""); setSchedTime(8);
+    showToast("📅 تم حفظ الموعد — المزود والمواطن سيتم إبلاغهم تلقائياً");
+    setTab("pipeline");
+  };
+
   return (
     <div className="portal ngo-portal" dir="rtl">
       {toast && <div className="action-toast">{toast}</div>}
@@ -221,6 +271,9 @@ export default function NgoPortal() {
         </button>
         <button className={`ptab ${tab === "verify"    ? "ptab-active" : ""}`} onClick={() => setTab("verify")}>
           ✅ التوثيق {deliveredTasks.length > 0 && <span className="tab-badge tab-badge-green">{deliveredTasks.length}</span>}
+        </button>
+        <button className={`ptab ${tab === "schedule"  ? "ptab-active" : ""}`} onClick={() => setTab("schedule")}>
+          📅 جدول المواعيد
         </button>
       </div>
 
@@ -397,6 +450,164 @@ export default function NgoPortal() {
             }
           </div>
         )}
+
+        {/* ════════════════════════════════════════
+            TAB 4 · SCHEDULE BUILDER
+        ════════════════════════════════════════ */}
+        {tab === "schedule" && (() => {
+          const days = getNextDays(7);
+          const pendingTasks = tasks.filter(t => t.status === "pending" || t.status === "in_progress");
+          const otherTasks = scheduleTask ? tasks.filter(t => t.id !== scheduleTask.id) : tasks;
+          const conflict = scheduleTask && schedDay
+            ? slotConflict(otherTasks, scheduleTask.zoneId, schedDay, schedTime)
+            : false;
+
+          return (
+            <div style={{ display:"flex", height:"calc(100vh - 178px)", overflow:"hidden", maxWidth:"none" }}>
+
+              {/* ── Right panel: task list + form (RTL = appears right) ── */}
+              <div style={{ width:320, flexShrink:0, borderLeft:"1px solid #e2e8f0", overflowY:"auto", background:"#f8fafc", padding:16 }}>
+                {!scheduleTask ? (
+                  <>
+                    <div style={{ fontWeight:700,fontSize:14,color:"#1e293b",marginBottom:12 }}>📋 المهام بانتظار الجدولة</div>
+                    {pendingTasks.length === 0
+                      ? <div className="empty-state" style={{padding:"30px 0"}}><div style={{fontSize:28}}>✅</div><div style={{fontSize:13}}>كل المهام مجدولة</div></div>
+                      : pendingTasks.map(task => {
+                        const zone  = zones.find(z => z.id === task.zoneId);
+                        const score = zone ? priorityScore(zone) : 50;
+                        const color = priorityColor(score);
+                        const scheduledDt = new Date(task.scheduledAt);
+                        return (
+                          <div key={task.id} className="sched-task-card" style={{ borderRight:`4px solid ${color}` }}>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontWeight:700,fontSize:13,color:"#1e293b" }}>{zone?.name ?? task.zoneId}</div>
+                              <div style={{ fontSize:11,color:"#64748b",marginTop:2 }}>💧 {Number(task.quantityLiters).toLocaleString()} لتر</div>
+                              <div style={{ fontSize:11,color:"#94a3b8",marginTop:1 }}>
+                                📅 {scheduledDt.toLocaleDateString("ar-SY")} الساعة {scheduledDt.getHours()}:00
+                              </div>
+                            </div>
+                            <button className="btn btn-outline btn-sm" style={{ fontSize:11,whiteSpace:"nowrap" }}
+                              onClick={() => {
+                                const base = new Date(task.scheduledAt);
+                                const baseDay = dayKey(base);
+                                setScheduleTask(task);
+                                setSchedDay(baseDay >= dayKey(new Date()) ? baseDay : dayKey(getNextDays(1)[0]));
+                                setSchedTime(Math.round(base.getHours() / 2) * 2 || 8);
+                              }}>
+                              📅 جدول →
+                            </button>
+                          </div>
+                        );
+                      })
+                    }
+                  </>
+                ) : (
+                  <div>
+                    <div style={{ fontWeight:700,fontSize:14,color:"#1e293b",marginBottom:4 }}>📅 جدولة الموعد</div>
+                    <div style={{ fontSize:12,color:"#64748b",marginBottom:14 }}>{zones.find(z=>z.id===scheduleTask.zoneId)?.name}</div>
+
+                    <div style={{ fontWeight:600,fontSize:12,color:"#374151",marginBottom:8 }}>اختر اليوم</div>
+                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:14 }}>
+                      {days.map(d => (
+                        <button key={dayKey(d)} className={`sched-day-btn ${schedDay===dayKey(d)?"sched-day-btn-active":""}`}
+                          onClick={()=>setSchedDay(dayKey(d))}>
+                          <div style={{ fontWeight:700,fontSize:12 }}>{AR_DAYS[d.getDay()]}</div>
+                          <div style={{ fontSize:10,opacity:.7 }}>{d.getDate()}/{d.getMonth()+1}</div>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div style={{ fontWeight:600,fontSize:12,color:"#374151",marginBottom:8 }}>الفترة الزمنية</div>
+                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:14 }}>
+                      {TIME_SLOTS.map(slot => (
+                        <button key={slot.h} className={`sched-time-btn ${schedTime===slot.h?"sched-time-btn-active":""}`}
+                          onClick={()=>setSchedTime(slot.h)}>
+                          {slot.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {schedDay && (
+                      <div className={`conflict-indicator ${conflict?"conflict-red":"conflict-green"}`}>
+                        <span style={{ fontSize:20 }}>{conflict?"⚠️":"✅"}</span>
+                        <div>
+                          {conflict
+                            ? <><div style={{ fontWeight:700,fontSize:12,color:"#dc2626" }}>تعارض في الموعد!</div><div style={{ fontSize:11,color:"#b91c1c" }}>توزيع آخر لنفس المنطقة في هذا الوقت</div></>
+                            : <><div style={{ fontWeight:700,fontSize:12,color:"#059669" }}>الموعد متاح ✓</div><div style={{ fontSize:11,color:"#047857" }}>التوزيع منسق جغرافياً</div></>
+                          }
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ display:"flex",gap:8,marginTop:14 }}>
+                      <button className="btn btn-outline btn-sm" style={{ flex:1 }} onClick={()=>{setScheduleTask(null);setSchedDay("");}}>إلغاء</button>
+                      <button className="btn btn-primary" style={{ flex:2,fontSize:13 }} disabled={!schedDay||conflict} onClick={saveSchedule}>
+                        ✅ تأكيد الموعد
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Left panel: weekly calendar grid ── */}
+              <div style={{ flex:1, overflowX:"auto", overflowY:"auto", padding:16 }}>
+                <div style={{ minWidth:560 }}>
+                  {/* Day headers */}
+                  <div className="cal-grid-header">
+                    <div className="cal-timecol-header">⏰</div>
+                    {days.map(d => (
+                      <div key={dayKey(d)} className={`cal-day-header ${dayKey(d)===schedDay?"cal-day-selected":""}`}>
+                        <div style={{ fontWeight:700,fontSize:12 }}>{AR_DAYS[d.getDay()]}</div>
+                        <div style={{ fontSize:11,color:dayKey(d)===schedDay?"#fff":"#94a3b8" }}>{d.getDate()}/{d.getMonth()+1}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Time rows */}
+                  {TIME_SLOTS.map(slot => (
+                    <div key={slot.h} className="cal-row">
+                      <div className="cal-time-label">{slot.label}</div>
+                      {days.map(d => {
+                        const cellTasks = tasksInSlot(tasks, d, slot.h);
+                        const isSelected = scheduleTask && dayKey(d)===schedDay && schedTime===slot.h;
+                        const hasConflictHere = isSelected && conflict;
+                        return (
+                          <div key={dayKey(d)}
+                            className={`cal-cell ${isSelected?(hasConflictHere?"cal-cell-conflict":"cal-cell-ok"):""} ${scheduleTask?"cal-cell-clickable":""}`}
+                            onClick={()=>{ if(scheduleTask){setSchedDay(dayKey(d));setSchedTime(slot.h);} }}>
+                            {cellTasks.map(t => {
+                              const z = zones.find(zn=>zn.id===t.zoneId);
+                              const color = z ? priorityColor(priorityScore(z)) : "#64748b";
+                              return (
+                                <div key={t.id} className="cal-task-block" style={{ background:color }}>
+                                  <div style={{ fontWeight:700,fontSize:9,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                                    {z?.name?.split(" / ")[0] ?? "مهمة"}
+                                  </div>
+                                  <div style={{ fontSize:8,opacity:.85 }}>{Number(t.quantityLiters)/1000}K ل</div>
+                                </div>
+                              );
+                            })}
+                            {isSelected && !hasConflictHere && (
+                              <div className="cal-preview-block">
+                                <div style={{ fontSize:9,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                                  {zones.find(z=>z.id===scheduleTask!.zoneId)?.name?.split(" / ")[0]}
+                                </div>
+                              </div>
+                            )}
+                            {isSelected && hasConflictHere && (
+                              <div className="cal-conflict-block">⚠️</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
       </div>
 
       {/* ════════════════════════════════════════

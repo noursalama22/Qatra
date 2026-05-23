@@ -152,6 +152,8 @@ export default function Citizen() {
               <div className="banner-sub">
                 {Number(nextDelivery.quantityLiters).toLocaleString()} لتر ·{" "}
                 {new Date(nextDelivery.scheduledAt).toLocaleDateString("ar-SY", { weekday: "long", day: "numeric", month: "long" })}
+                {" الساعة "}
+                {new Date(nextDelivery.scheduledAt).toLocaleTimeString("ar-SY", { hour: "2-digit", minute: "2-digit" })}
               </div>
             </div>
             {nextDelivery.status === "in_progress" && (
