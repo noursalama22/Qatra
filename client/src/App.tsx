@@ -6,20 +6,23 @@ import Drivers from "./pages/Drivers";
 import Ngos from "./pages/Ngos";
 import Providers from "./pages/Providers";
 import Orders from "./pages/Orders";
+import Citizen from "./pages/Citizen";
 
-type Page = "dashboard" | "zones" | "tasks" | "drivers" | "ngos" | "providers" | "orders";
+type Page = "citizen" | "dashboard" | "zones" | "tasks" | "drivers" | "ngos" | "providers" | "orders";
 
 const navItems: { id: Page; label: string; icon: string; section?: string }[] = [
-  { id: "dashboard", label: "Dashboard", icon: "📊", section: "Overview" },
-  { id: "zones", label: "Zones", icon: "🗺️", section: "Operations" },
-  { id: "tasks", label: "Distribution Tasks", icon: "📋" },
-  { id: "orders", label: "Delivery Orders", icon: "📦" },
-  { id: "drivers", label: "Drivers", icon: "👷", section: "People" },
-  { id: "ngos", label: "NGOs", icon: "🏢" },
-  { id: "providers", label: "Providers", icon: "🚚" },
+  { id: "citizen", label: "بوابة المواطن", icon: "👤", section: "المواطن" },
+  { id: "dashboard", label: "لوحة التحكم", icon: "📊", section: "الإدارة" },
+  { id: "zones", label: "مناطق التغطية", icon: "🗺️" },
+  { id: "tasks", label: "مهام التوزيع", icon: "📋" },
+  { id: "orders", label: "طلبات التوصيل", icon: "📦" },
+  { id: "drivers", label: "السائقون", icon: "👷", section: " " },
+  { id: "ngos", label: "المنظمات", icon: "🏢" },
+  { id: "providers", label: "مزودو الخدمة", icon: "🚚" },
 ];
 
 const pageTitles: Record<Page, string> = {
+  citizen: "بوابة المواطن",
   dashboard: "Dashboard",
   zones: "Coverage Zones",
   tasks: "Distribution Tasks",
@@ -30,17 +33,18 @@ const pageTitles: Record<Page, string> = {
 };
 
 export default function App() {
-  const [page, setPage] = useState<Page>("dashboard");
+  const [page, setPage] = useState<Page>("citizen");
 
   const renderPage = () => {
     switch (page) {
+      case "citizen":   return <Citizen />;
       case "dashboard": return <Dashboard />;
-      case "zones": return <Zones />;
-      case "tasks": return <Tasks />;
-      case "drivers": return <Drivers />;
-      case "ngos": return <Ngos />;
+      case "zones":     return <Zones />;
+      case "tasks":     return <Tasks />;
+      case "drivers":   return <Drivers />;
+      case "ngos":      return <Ngos />;
       case "providers": return <Providers />;
-      case "orders": return <Orders />;
+      case "orders":    return <Orders />;
     }
   };
 
@@ -52,7 +56,7 @@ export default function App() {
           <span>Water Delivery Platform</span>
         </div>
         <nav className="sidebar-nav">
-          {navItems.map((item, i) => (
+          {navItems.map((item) => (
             <div key={item.id}>
               {item.section && (
                 <div className="nav-section-label">{item.section}</div>
@@ -69,17 +73,19 @@ export default function App() {
         </nav>
         <div style={{ padding: "16px 20px", borderTop: "1px solid #334155" }}>
           <div style={{ fontSize: 11, color: "#475569", marginBottom: 4 }}>Demo Mode</div>
-          <div style={{ fontSize: 12, color: "#64748b" }}>Mock data · No auth</div>
+          <div style={{ fontSize: 12, color: "#64748b" }}>PostgreSQL · No auth</div>
         </div>
       </aside>
 
       <div className="main">
-        <header className="topbar">
-          <h2>{pageTitles[page]}</h2>
-          <div className="topbar-right">
-            <span className="badge-demo">🎯 Demo</span>
-          </div>
-        </header>
+        {page !== "citizen" && (
+          <header className="topbar">
+            <h2>{pageTitles[page]}</h2>
+            <div className="topbar-right">
+              <span className="badge-demo">🎯 Demo</span>
+            </div>
+          </header>
+        )}
         {renderPage()}
       </div>
     </div>

@@ -152,5 +152,76 @@ app.get("/api/stats", async (_req, res) => {
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+// ── Citizen Endpoints ──────────────────────────────────────────────────────
+
+// Active zones list (for zone picker)
+app.get("/api/citizen/zones", async (_req, res) => {
+  try {
+    const data = await db.select().from(zonesTable)
+      .where(eq(zonesTable.status, "active"))
+      .orderBy(zonesTable.name);
+    res.json({ data });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// Distribution schedule for a zone
+app.get("/api/citizen/zones/:zoneId/schedule", async (req, res) => {
+  try {
+    const data = await db.select().from(distributionTasksTable)
+      .where(eq(distributionTasksTable.zoneId, req.params.zoneId))
+      .orderBy(distributionTasksTable.scheduledAt);
+    res.json({ data });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// Approved providers (for order form)
+app.get("/api/citizen/providers", async (_req, res) => {
+  try {
+    const data = await db.select().from(providersTable)
+      .where(eq(providersTable.status, "approved"))
+      .orderBy(providersTable.companyName);
+    res.json({ data });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// Send water need signal
+app.post("/api/citizen/signals", async (req, res) => {
+  try {
+    const { citizenId, zoneId } = req.body;
+    // Insert signal
+    const [signal] = await db.insert(signalsTable).values({ citizenId, zoneId }).returning();
+    // Increment zone signal count
+    await db.update(zonesTable)
+      .set({ signalCount: sql`${zonesTable.signalCount} + 1`, updatedAt: new Date() })
+      .where(eq(zonesTable.id, zoneId));
+    res.status(201).json(signal);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// Place a delivery order
+app.post("/api/citizen/orders", async (req, res) => {
+  try {
+    const { citizenId, providerId, quantityLiters, totalAmount } = req.body;
+    const [order] = await db.insert(deliveryOrdersTable).values({
+      citizenId,
+      providerId,
+      quantityLiters: String(quantityLiters),
+      totalAmount: String(totalAmount),
+      status: "pending",
+    }).returning();
+    res.status(201).json(order);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// Get orders for a citizen
+app.get("/api/citizen/:citizenId/orders", async (req, res) => {
+  try {
+    const data = await db.select().from(deliveryOrdersTable)
+      .where(eq(deliveryOrdersTable.citizenId, req.params.citizenId))
+      .orderBy(deliveryOrdersTable.createdAt);
+    res.json({ data });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 const PORT = 3001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
