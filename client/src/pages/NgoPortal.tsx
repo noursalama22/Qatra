@@ -315,13 +315,13 @@ export default function NgoPortal() {
                 <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.6, maxWidth: 280, textAlign: "center" }}>
                   انقر على أي حي أو منطقة على الخريطة لعرض جدول التوزيع الأسبوعي والحجوزات المتاحة
                 </div>
-                <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-                  {zones.slice(0, 4).map(z => (
+                <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 6, width: "100%", maxWidth: 300, maxHeight: 340, overflowY: "auto" }}>
+                  {[...zones].sort((a, b) => priorityScore(b) - priorityScore(a)).map(z => (
                     <button key={z.id} className="ngo-zone-quick-btn" onClick={() => selectZone(z)}>
-                      <span style={{ fontSize: 10, background: priorityColor(priorityScore(z)), color: "#fff", borderRadius: 6, padding: "2px 6px", fontWeight: 700 }}>
+                      <span style={{ fontSize: 10, background: priorityColor(priorityScore(z)), color: "#fff", borderRadius: 6, padding: "2px 6px", fontWeight: 700, flexShrink: 0 }}>
                         {priorityScore(z)}
                       </span>
-                      {z.name}
+                      <span style={{ flex: 1, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{z.name}</span>
                     </button>
                   ))}
                 </div>
