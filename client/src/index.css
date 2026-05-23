@@ -1199,13 +1199,16 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   position: absolute;
   bottom: 14px;
   left: 14px;
+  width: fit-content;
+  max-width: 160px;
   background: rgba(255,255,255,0.96);
   backdrop-filter: blur(6px);
   border-radius: 10px;
-  padding: 10px 13px;
+  padding: 9px 12px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.15);
   z-index: 500;
   border: 1px solid #e2e8f0;
+  pointer-events: none;
 }
 
 /* ── Scheduling drawer (slides in from left in RTL = right side visually) ── */
