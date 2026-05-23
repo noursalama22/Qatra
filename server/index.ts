@@ -8,6 +8,11 @@ import {
 import { eq, count, sum, sql, desc } from "drizzle-orm";
 
 const app = express();
+app.use((_req, res, next) => {
+  res.removeHeader("X-Frame-Options");
+  res.setHeader("Content-Security-Policy", "frame-ancestors *");
+  next();
+});
 app.use(express.json());
 
 app.get("/api/healthz", (_req, res) => res.json({ status: "ok" }));
