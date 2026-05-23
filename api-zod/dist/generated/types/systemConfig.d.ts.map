@@ -1,0 +1,1 @@
+{"version":3,"file":"systemConfig.d.ts","sourceRoot":"","sources":["../../../src/generated/types/systemConfig.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,YAAY;IAC3B,mBAAmB,EAAE,MAAM,CAAC;IAC5B,uBAAuB,EAAE,MAAM,CAAC;IAChC,gBAAgB,EAAE,MAAM,CAAC;IACzB,eAAe,EAAE,MAAM,CAAC;IACxB,kBAAkB,EAAE,MAAM,CAAC;IAC3B,kBAAkB,EAAE,MAAM,CAAC;CAC5B"}

@@ -1,0 +1,2914 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Qatra v3 — Water delivery platform for humanitarian and commercial operations
+servers:
+  - url: /api
+    description: Base API path
+
+tags:
+  - name: health
+    description: Health operations
+  - name: Auth
+    description: Browser and mobile authentication endpoints
+  - name: Users
+    description: User role management
+  - name: Admin
+    description: Platform admin operations
+  - name: NGO
+    description: NGO operations
+  - name: Providers
+    description: Service provider operations
+  - name: Drivers
+    description: Driver operations
+  - name: Citizens
+    description: Citizen operations
+  - name: Zones
+    description: Coverage zone operations
+  - name: Notifications
+    description: Notification management
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ── Auth ──────────────────────────────────────────────────────────────────
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the currently authenticated user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Auth status resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start the browser OIDC login flow
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to the OIDC authorization endpoint.
+
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete the browser OIDC login flow
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: iss
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uri
+      responses:
+        '302':
+          description: Redirect to the returnTo path on success.
+
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Clear the session and begin OIDC logout
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '302':
+          description: Redirect to the OIDC provider logout URL.
+
+  /mobile-auth/token-exchange:
+    post:
+      tags: [Auth]
+      operationId: exchangeMobileAuthorizationCode
+      summary: Exchange a mobile OIDC code for a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileTokenExchangeRequest'
+      responses:
+        '200':
+          description: Session created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileTokenExchangeSuccess'
+        '400':
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Token did not contain usable claims.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Token exchange failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /mobile-auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutMobileSession
+      summary: Delete a mobile session token
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        '200':
+          description: Logout processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutSuccess'
+
+  # ── User role ──────────────────────────────────────────────────────────────
+  /users/me/role:
+    get:
+      tags: [Users]
+      operationId: getMyRole
+      summary: Get current user's platform role and profile
+      responses:
+        '200':
+          description: Role and profile data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRoleProfile'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /users/me/role/assign:
+    post:
+      tags: [Users]
+      operationId: assignMyRole
+      summary: Claim an initial role (citizen self-registration, or first-time onboarding)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleClaim'
+      responses:
+        '200':
+          description: Role assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRoleProfile'
+        '400':
+          description: Invalid role claim
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  # ── Admin ──────────────────────────────────────────────────────────────────
+  /admin/dashboard:
+    get:
+      tags: [Admin]
+      operationId: getAdminDashboard
+      summary: Global platform statistics
+      responses:
+        '200':
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDashboard'
+
+  /admin/applications/ngos:
+    get:
+      tags: [Admin]
+      operationId: listNgoApplications
+      summary: List NGO applications
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+      responses:
+        '200':
+          description: List of NGO applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NgoApplication'
+
+  /admin/applications/ngos/{id}/approve:
+    patch:
+      tags: [Admin]
+      operationId: approveNgoApplication
+      summary: Approve an NGO application
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: NGO approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NgoApplication'
+        '404':
+          description: Application not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /admin/applications/ngos/{id}/reject:
+    patch:
+      tags: [Admin]
+      operationId: rejectNgoApplication
+      summary: Reject an NGO application
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectionNote'
+      responses:
+        '200':
+          description: NGO rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NgoApplication'
+
+  /admin/applications/providers:
+    get:
+      tags: [Admin]
+      operationId: listProviderApplications
+      summary: List service provider applications
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+      responses:
+        '200':
+          description: List of provider applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProviderApplication'
+
+  /admin/applications/providers/{id}/approve:
+    patch:
+      tags: [Admin]
+      operationId: approveProviderApplication
+      summary: Approve a service provider application
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Provider approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderApplication'
+        '404':
+          description: Application not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /admin/applications/providers/{id}/reject:
+    patch:
+      tags: [Admin]
+      operationId: rejectProviderApplication
+      summary: Reject a service provider application
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectionNote'
+      responses:
+        '200':
+          description: Provider rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderApplication'
+
+  /admin/system-config:
+    get:
+      tags: [Admin]
+      operationId: getSystemConfig
+      summary: Get system-wide configuration
+      responses:
+        '200':
+          description: System configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemConfig'
+    patch:
+      tags: [Admin]
+      operationId: updateSystemConfig
+      summary: Update system-wide configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemConfigPatch'
+      responses:
+        '200':
+          description: Updated system configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemConfig'
+
+  /admin/audit-log:
+    get:
+      tags: [Admin]
+      operationId: getAuditLog
+      summary: Get audit log entries
+      parameters:
+        - name: actorId
+          in: query
+          schema:
+            type: string
+        - name: entityType
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogPage'
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      operationId: listAllUsers
+      summary: List all platform users
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [admin, ngo, provider, driver, citizen]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Users list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListPage'
+
+  /admin/users/{userId}/role:
+    patch:
+      tags: [Admin]
+      operationId: adminSetUserRole
+      summary: Admin sets a user's role
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRoleAssignment'
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRoleProfile'
+
+  # ── NGO ──────────────────────────────────────────────────────────────────
+  /ngos/apply:
+    post:
+      tags: [NGO]
+      operationId: applyAsNgo
+      summary: Submit an NGO application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NgoInput'
+      responses:
+        '201':
+          description: Application submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ngo'
+
+  /ngos/me:
+    get:
+      tags: [NGO]
+      operationId: getMyNgo
+      summary: Get current NGO profile
+      responses:
+        '200':
+          description: NGO profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ngo'
+
+  /ngos/me/dashboard:
+    get:
+      tags: [NGO]
+      operationId: getNgoDashboard
+      summary: NGO overview — zones with priority scores and delivery progress
+      responses:
+        '200':
+          description: NGO dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NgoDashboard'
+
+  /ngos/me/zones:
+    get:
+      tags: [NGO]
+      operationId: listMyZones
+      summary: List coverage zones belonging to this NGO
+      responses:
+        '200':
+          description: List of zones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Zone'
+    post:
+      tags: [NGO]
+      operationId: createZone
+      summary: Create a coverage zone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZoneInput'
+      responses:
+        '201':
+          description: Zone created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+
+  /ngos/me/zones/{id}:
+    get:
+      tags: [NGO]
+      operationId: getMyZone
+      summary: Get a zone by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Zone detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+        '404':
+          description: Zone not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    patch:
+      tags: [NGO]
+      operationId: updateMyZone
+      summary: Update a coverage zone
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZonePatch'
+      responses:
+        '200':
+          description: Updated zone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Zone'
+    delete:
+      tags: [NGO]
+      operationId: deleteMyZone
+      summary: Delete a coverage zone
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Zone deleted
+
+  /ngos/me/distribution-tasks:
+    get:
+      tags: [NGO]
+      operationId: listDistributionTasks
+      summary: List distribution tasks created by this NGO
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in_progress, delivered, cancelled]
+        - name: zoneId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of distribution tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DistributionTask'
+    post:
+      tags: [NGO]
+      operationId: createDistributionTask
+      summary: Create a new distribution task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DistributionTaskInput'
+      responses:
+        '201':
+          description: Distribution task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistributionTask'
+
+  /ngos/me/distribution-tasks/{id}:
+    get:
+      tags: [NGO]
+      operationId: getDistributionTask
+      summary: Get distribution task detail with delivery progress
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Distribution task detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistributionTaskDetail'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    patch:
+      tags: [NGO]
+      operationId: updateDistributionTask
+      summary: Update a distribution task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DistributionTaskPatch'
+      responses:
+        '200':
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistributionTask'
+
+  /ngos/me/providers:
+    get:
+      tags: [NGO]
+      operationId: listAvailableProviders
+      summary: List approved service providers available for NGO task assignment
+      responses:
+        '200':
+          description: List of providers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProviderSummary'
+
+  /ngos/me/providers/{providerId}/performance:
+    get:
+      tags: [NGO]
+      operationId: getProviderPerformance
+      summary: Get a provider's performance metrics
+      parameters:
+        - name: providerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Provider performance report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderPerformance'
+
+  # ── Service Providers ──────────────────────────────────────────────────────
+  /providers/apply:
+    post:
+      tags: [Providers]
+      operationId: applyAsProvider
+      summary: Submit a service provider application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderInput'
+      responses:
+        '201':
+          description: Application submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Provider'
+
+  /providers/me:
+    get:
+      tags: [Providers]
+      operationId: getMyProvider
+      summary: Get current provider profile
+      responses:
+        '200':
+          description: Provider profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Provider'
+    patch:
+      tags: [Providers]
+      operationId: updateMyProvider
+      summary: Update provider profile (mode settings)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderPatch'
+      responses:
+        '200':
+          description: Updated provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Provider'
+
+  /providers/me/dashboard/humanitarian:
+    get:
+      tags: [Providers]
+      operationId: getHumanitarianDashboard
+      summary: Humanitarian operations dashboard — task completion, zone coverage, driver utilisation
+      responses:
+        '200':
+          description: Humanitarian dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HumanitarianDashboard'
+
+  /providers/me/dashboard/commercial:
+    get:
+      tags: [Providers]
+      operationId: getCommercialDashboard
+      summary: Commercial revenue dashboard — earnings, subscriptions, platform fees
+      responses:
+        '200':
+          description: Commercial dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialDashboard'
+
+  /providers/me/ngo-tasks:
+    get:
+      tags: [Providers]
+      operationId: listProviderNgoTasks
+      summary: List NGO-assigned distribution tasks for this provider
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, acknowledged, in_progress, delivered]
+      responses:
+        '200':
+          description: List of NGO tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProviderNgoTask'
+
+  /providers/me/ngo-tasks/{taskId}/acknowledge:
+    patch:
+      tags: [Providers]
+      operationId: acknowledgeNgoTask
+      summary: Acknowledge receipt of an NGO-assigned task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderNgoTask'
+
+  /providers/me/ngo-tasks/{taskId}/assign-driver:
+    post:
+      tags: [Providers]
+      operationId: assignDriverToTask
+      summary: Assign an owned driver to an NGO task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverAssignment'
+      responses:
+        '200':
+          description: Driver assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderNgoTask'
+
+  /providers/me/ngo-tasks/{taskId}/invite-driver:
+    post:
+      tags: [Providers]
+      operationId: inviteIndependentDriver
+      summary: Invite an independent driver to an NGO task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverInviteInput'
+      responses:
+        '200':
+          description: Invitation sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverInvitation'
+
+  /providers/me/orders:
+    get:
+      tags: [Providers]
+      operationId: listProviderOrders
+      summary: List citizen per-delivery orders (commercial mode)
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, dispatched, delivered, cancelled]
+      responses:
+        '200':
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeliveryOrder'
+
+  /providers/me/orders/{orderId}/dispatch:
+    post:
+      tags: [Providers]
+      operationId: dispatchOrderDriver
+      summary: Assign a driver to a citizen order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverAssignment'
+      responses:
+        '200':
+          description: Driver dispatched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryOrder'
+
+  /providers/me/subscriptions:
+    get:
+      tags: [Providers]
+      operationId: listProviderSubscriptions
+      summary: List active citizen subscriptions (commercial mode)
+      responses:
+        '200':
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subscription'
+
+  /providers/me/drivers:
+    get:
+      tags: [Providers]
+      operationId: listProviderDrivers
+      summary: List owned drivers for this provider
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, active, inactive]
+      responses:
+        '200':
+          description: List of owned drivers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DriverSummary'
+
+  /providers/me/drivers/{driverId}/approve:
+    post:
+      tags: [Providers]
+      operationId: approveOwnedDriver
+      summary: Approve a driver onboarding application
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Driver approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverSummary'
+
+  /providers/me/drivers/{driverId}/reject:
+    post:
+      tags: [Providers]
+      operationId: rejectOwnedDriver
+      summary: Reject a driver onboarding application
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectionNote'
+      responses:
+        '200':
+          description: Driver rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverSummary'
+
+  /providers/me/map:
+    get:
+      tags: [Providers]
+      operationId: getProviderMapData
+      summary: Live operations map — driver GPS positions and zone priority polygons
+      responses:
+        '200':
+          description: Map data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderMapData'
+
+  # ── Drivers ──────────────────────────────────────────────────────────────
+  /drivers/apply:
+    post:
+      tags: [Drivers]
+      operationId: applyAsDriver
+      summary: Apply to become an owned driver under a provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverInput'
+      responses:
+        '201':
+          description: Application submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+
+  /drivers/me:
+    get:
+      tags: [Drivers]
+      operationId: getMyDriver
+      summary: Get current driver profile
+      responses:
+        '200':
+          description: Driver profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+
+  /drivers/me/dashboard:
+    get:
+      tags: [Drivers]
+      operationId: getDriverDashboard
+      summary: Driver performance summary — tasks completed, on-time rate, active task
+      responses:
+        '200':
+          description: Driver dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverDashboard'
+
+  /drivers/me/tasks:
+    get:
+      tags: [Drivers]
+      operationId: listDriverTasks
+      summary: List driver tasks (assignments and invitations)
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in_progress, delivered, invitation_pending]
+      responses:
+        '200':
+          description: List of driver tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DriverTask'
+
+  /drivers/me/tasks/{taskId}/accept:
+    post:
+      tags: [Drivers]
+      operationId: acceptDriverTask
+      summary: Accept a task invitation
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverTask'
+
+  /drivers/me/tasks/{taskId}/reject:
+    post:
+      tags: [Drivers]
+      operationId: rejectDriverTask
+      summary: Reject a task invitation
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverTask'
+
+  /drivers/me/tasks/{taskId}/start:
+    patch:
+      tags: [Drivers]
+      operationId: startDriverTask
+      summary: Start a task (transition to in_progress), begin GPS streaming
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverTask'
+
+  /drivers/me/tasks/{taskId}/proof:
+    post:
+      tags: [Drivers]
+      operationId: submitDeliveryProof
+      summary: Submit delivery proof (photo + optional signature) to close task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProofInput'
+      responses:
+        '201':
+          description: Proof submitted, task delivered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryProof'
+
+  /drivers/me/gps:
+    post:
+      tags: [Drivers]
+      operationId: updateDriverGps
+      summary: Send GPS position update for active task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GpsPosition'
+      responses:
+        '200':
+          description: GPS position recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GpsPosition'
+
+  # ── Citizens ──────────────────────────────────────────────────────────────
+  /citizens/register:
+    post:
+      tags: [Citizens]
+      operationId: registerCitizen
+      summary: Register as a citizen (provide zone location)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CitizenInput'
+      responses:
+        '201':
+          description: Citizen registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Citizen'
+
+  /citizens/me:
+    get:
+      tags: [Citizens]
+      operationId: getMyCitizen
+      summary: Get current citizen profile
+      responses:
+        '200':
+          description: Citizen profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Citizen'
+
+  /citizens/me/zone:
+    get:
+      tags: [Citizens]
+      operationId: getMyCitizenZone
+      summary: Get zone status for current citizen — priority score, last delivery, upcoming schedule
+      responses:
+        '200':
+          description: Zone status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CitizenZoneStatus'
+
+  /citizens/me/signal:
+    post:
+      tags: [Citizens]
+      operationId: sendWaterNeedSignal
+      summary: Send a one-tap water need signal
+      responses:
+        '201':
+          description: Signal recorded with updated zone priority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalResponse'
+
+  /citizens/me/providers:
+    get:
+      tags: [Citizens]
+      operationId: listCitizenProviders
+      summary: List commercial providers available in the citizen's zone
+      responses:
+        '200':
+          description: List of commercial providers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProviderSummary'
+
+  /citizens/me/subscriptions:
+    get:
+      tags: [Citizens]
+      operationId: listCitizenSubscriptions
+      summary: List citizen's active subscriptions
+      responses:
+        '200':
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subscription'
+    post:
+      tags: [Citizens]
+      operationId: subscribeToCitizenProvider
+      summary: Subscribe to a commercial provider plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionInput'
+      responses:
+        '201':
+          description: Subscription created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+
+  /citizens/me/subscriptions/{id}:
+    delete:
+      tags: [Citizens]
+      operationId: cancelCitizenSubscription
+      summary: Cancel a subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Subscription cancelled
+
+  /citizens/me/orders:
+    get:
+      tags: [Citizens]
+      operationId: listCitizenOrders
+      summary: List citizen's delivery orders
+      responses:
+        '200':
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeliveryOrder'
+    post:
+      tags: [Citizens]
+      operationId: placeDeliveryOrder
+      summary: Place a per-delivery order (commercial)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryOrderInput'
+      responses:
+        '201':
+          description: Order placed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryOrder'
+
+  /citizens/me/deliveries:
+    get:
+      tags: [Citizens]
+      operationId: listCitizenDeliveries
+      summary: Full delivery history (both humanitarian and commercial)
+      responses:
+        '200':
+          description: Delivery history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeliverySummary'
+
+  /citizens/me/deliveries/{id}:
+    get:
+      tags: [Citizens]
+      operationId: getCitizenDelivery
+      summary: Get delivery detail with proof photos
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Delivery detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryDetail'
+        '404':
+          description: Delivery not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /citizens/me/driver-location/{taskId}:
+    get:
+      tags: [Citizens]
+      operationId: getCitizenDriverLocation
+      summary: Get live driver GPS position for an active delivery task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Driver GPS position and ETA
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveDriverLocation'
+        '404':
+          description: No active task or driver location not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  # ── Zones ──────────────────────────────────────────────────────────────────
+  /zones:
+    get:
+      tags: [Zones]
+      operationId: listZones
+      summary: List all zones (admin view)
+      responses:
+        '200':
+          description: List of zones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Zone'
+
+  /zones/{id}/priority:
+    get:
+      tags: [Zones]
+      operationId: getZonePriority
+      summary: Get computed priority score for a zone
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Zone priority score
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ZonePriorityScore'
+
+  /zones/priority-heatmap:
+    get:
+      tags: [Zones]
+      operationId: getZonePriorityHeatmap
+      summary: Signal density heatmap — all zones with priority scores
+      responses:
+        '200':
+          description: Heatmap data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ZoneHeatmapEntry'
+
+  # ── Notifications ──────────────────────────────────────────────────────────
+  /notifications:
+    get:
+      tags: [Notifications]
+      operationId: listNotifications
+      summary: List notifications for the current user
+      parameters:
+        - name: unreadOnly
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+
+  /notifications/{id}/read:
+    patch:
+      tags: [Notifications]
+      operationId: markNotificationRead
+      summary: Mark a notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Notification marked read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+
+  /notifications/read-all:
+    patch:
+      tags: [Notifications]
+      operationId: markAllNotificationsRead
+      summary: Mark all notifications as read
+      responses:
+        '200':
+          description: All notifications marked read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchUpdateResult'
+
+  # ── Payments ────────────────────────────────────────────────────────────────
+
+  /payments/me:
+    get:
+      tags: [Payments]
+      operationId: getMyPayments
+      summary: List my payments
+      responses:
+        '200':
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Payment'
+
+  /payments/initiate:
+    post:
+      tags: [Payments]
+      operationId: initiatePayment
+      summary: Initiate a mock payment (citizen only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentInput'
+      responses:
+        '201':
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+
+  /payments/{id}:
+    get:
+      tags: [Payments]
+      operationId: getPayment
+      summary: Get a single payment by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payment detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          description: Not found
+
+  /payments/{id}/confirm:
+    post:
+      tags: [Payments]
+      operationId: confirmPayment
+      summary: Confirm (complete) a pending mock payment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payment confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400':
+          description: Payment not in pending state
+        '404':
+          description: Not found
+
+components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      description: Opaque session token — `Bearer <sid>`.
+      schema:
+        type: string
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      description: Browser session cookie.
+      schema:
+        type: string
+
+  schemas:
+    # ── Health ──────────────────────────────────────────────────────────────
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    # ── Auth ──────────────────────────────────────────────────────────────
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl]
+      properties:
+        id:
+          type: string
+        email:
+          type: ["string", "null"]
+          format: email
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
+
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: 'null'
+
+    MobileTokenExchangeRequest:
+      type: object
+      required: [code, code_verifier, redirect_uri, state]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        code_verifier:
+          type: string
+          minLength: 1
+        redirect_uri:
+          type: string
+          minLength: 1
+          format: uri
+        state:
+          type: string
+          minLength: 1
+        nonce:
+          type: string
+          minLength: 1
+
+    MobileTokenExchangeSuccess:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+
+    LogoutSuccess:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    # ── Users & Roles ──────────────────────────────────────────────────────
+    UserRoleProfile:
+      type: object
+      required: [userId, role, status]
+      properties:
+        userId:
+          type: string
+        role:
+          type: ["string", "null"]
+          enum: [admin, ngo, provider, driver, citizen, null]
+        status:
+          type: string
+          enum: [approved, pending, rejected, none]
+        profileId:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+
+    RoleClaim:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [citizen]
+
+    AdminRoleAssignment:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [admin, ngo, provider, driver, citizen]
+
+    UserListPage:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserRoleProfile'
+        total:
+          type: integer
+
+    # ── Admin ──────────────────────────────────────────────────────────────
+    AdminDashboard:
+      type: object
+      required: [pendingNgoApplications, pendingProviderApplications, activeTaskCount, driversOnRoute, zonesAboveThreshold, syncHealthPercent]
+      properties:
+        pendingNgoApplications:
+          type: integer
+        pendingProviderApplications:
+          type: integer
+        activeTaskCount:
+          type: integer
+        driversOnRoute:
+          type: integer
+        zonesAboveThreshold:
+          type: integer
+        syncHealthPercent:
+          type: number
+
+    NgoApplication:
+      type: object
+      required: [id, userId, orgName, status, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        orgName:
+          type: string
+        contactEmail:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        rejectionReason:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProviderApplication:
+      type: object
+      required: [id, userId, companyName, status, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        companyName:
+          type: string
+        contactEmail:
+          type: ["string", "null"]
+        operatingModes:
+          type: array
+          items:
+            type: string
+            enum: [humanitarian, commercial]
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        rejectionReason:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RejectionNote:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+
+    SystemConfig:
+      type: object
+      required: [signalDensityWeight, daysSinceDeliveryWeight, populationWeight, signalThreshold, platformFeePercent, autoEscalationDays]
+      properties:
+        signalDensityWeight:
+          type: number
+        daysSinceDeliveryWeight:
+          type: number
+        populationWeight:
+          type: number
+        signalThreshold:
+          type: integer
+        platformFeePercent:
+          type: number
+        autoEscalationDays:
+          type: integer
+
+    SystemConfigPatch:
+      type: object
+      properties:
+        signalDensityWeight:
+          type: number
+        daysSinceDeliveryWeight:
+          type: number
+        populationWeight:
+          type: number
+        signalThreshold:
+          type: integer
+        platformFeePercent:
+          type: number
+        autoEscalationDays:
+          type: integer
+
+    AuditLogEntry:
+      type: object
+      required: [id, actorId, action, entityType, createdAt]
+      properties:
+        id:
+          type: string
+        actorId:
+          type: string
+        actorRole:
+          type: ["string", "null"]
+        action:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: ["string", "null"]
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+
+    AuditLogPage:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogEntry'
+        total:
+          type: integer
+
+    # ── Shared ──────────────────────────────────────────────────────────────
+    BatchUpdateResult:
+      type: object
+      required: [updated]
+      properties:
+        updated:
+          type: integer
+
+    # ── NGO ──────────────────────────────────────────────────────────────
+    Ngo:
+      type: object
+      required: [id, userId, orgName, status, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        orgName:
+          type: string
+        contactEmail:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        createdAt:
+          type: string
+          format: date-time
+
+    NgoInput:
+      type: object
+      required: [orgName]
+      properties:
+        orgName:
+          type: string
+          minLength: 1
+        contactEmail:
+          type: string
+          format: email
+        country:
+          type: string
+        description:
+          type: string
+
+    NgoDashboard:
+      type: object
+      required: [zones, taskStats]
+      properties:
+        zones:
+          type: array
+          items:
+            $ref: '#/components/schemas/ZonePriorityScore'
+        taskStats:
+          type: object
+          required: [total, pending, inProgress, delivered]
+          properties:
+            total:
+              type: integer
+            pending:
+              type: integer
+            inProgress:
+              type: integer
+            delivered:
+              type: integer
+        topProviders:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderPerformance'
+
+    # ── Zones ──────────────────────────────────────────────────────────────
+    Zone:
+      type: object
+      required: [id, ngoId, name, status, createdAt]
+      properties:
+        id:
+          type: string
+        ngoId:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        boundary:
+          type: object
+          description: GeoJSON polygon boundary
+          additionalProperties: true
+          nullable: true
+        populationEstimate:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [active, inactive]
+        priorityScore:
+          type: ["number", "null"]
+        lastDeliveryAt:
+          type: ["string", "null"]
+          format: date-time
+        signalCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    ZoneInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        boundary:
+          type: object
+          additionalProperties: true
+        populationEstimate:
+          type: integer
+
+    ZonePatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        boundary:
+          type: object
+          additionalProperties: true
+        populationEstimate:
+          type: integer
+        status:
+          type: string
+          enum: [active, inactive]
+
+    ZonePriorityScore:
+      type: object
+      required: [zoneId, zoneName, priorityScore, signalCount, daysSinceLastDelivery]
+      properties:
+        zoneId:
+          type: string
+        zoneName:
+          type: string
+        priorityScore:
+          type: number
+        signalCount:
+          type: integer
+        daysSinceLastDelivery:
+          type: ["integer", "null"]
+        lastDeliveryAt:
+          type: ["string", "null"]
+          format: date-time
+        nextScheduledAt:
+          type: ["string", "null"]
+          format: date-time
+
+    ZoneHeatmapEntry:
+      type: object
+      required: [zoneId, zoneName, priorityScore, signalCount]
+      properties:
+        zoneId:
+          type: string
+        zoneName:
+          type: string
+        priorityScore:
+          type: number
+        signalCount:
+          type: integer
+        boundary:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    # ── Distribution Tasks ──────────────────────────────────────────────────
+    DistributionTask:
+      type: object
+      required: [id, ngoId, zoneId, status, quantityLiters, scheduledAt, createdAt]
+      properties:
+        id:
+          type: string
+        ngoId:
+          type: string
+        zoneId:
+          type: string
+        zoneName:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, in_progress, delivered, cancelled]
+        quantityLiters:
+          type: number
+        scheduledAt:
+          type: string
+          format: date-time
+        assignedProviderIds:
+          type: array
+          items:
+            type: string
+        deliveredCount:
+          type: integer
+        totalCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    DistributionTaskInput:
+      type: object
+      required: [zoneId, quantityLiters, scheduledAt, assignedProviderIds]
+      properties:
+        zoneId:
+          type: string
+        quantityLiters:
+          type: number
+          minimum: 0
+        scheduledAt:
+          type: string
+          format: date-time
+        assignedProviderIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        notes:
+          type: string
+
+    DistributionTaskPatch:
+      type: object
+      properties:
+        quantityLiters:
+          type: number
+        scheduledAt:
+          type: string
+          format: date-time
+        assignedProviderIds:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [pending, cancelled]
+        notes:
+          type: string
+
+    DistributionTaskDetail:
+      type: object
+      required: [id, ngoId, zoneId, status, quantityLiters, scheduledAt, createdAt, deliveries]
+      properties:
+        id:
+          type: string
+        ngoId:
+          type: string
+        zoneId:
+          type: string
+        zoneName:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, in_progress, delivered, cancelled]
+        quantityLiters:
+          type: number
+        scheduledAt:
+          type: string
+          format: date-time
+        assignedProviderIds:
+          type: array
+          items:
+            type: string
+        deliveredCount:
+          type: integer
+        totalCount:
+          type: integer
+        deliveries:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeliverySummary'
+        createdAt:
+          type: string
+          format: date-time
+
+    # ── Providers ──────────────────────────────────────────────────────────
+    Provider:
+      type: object
+      required: [id, userId, companyName, status, operatingModes, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        companyName:
+          type: string
+        contactEmail:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        operatingModes:
+          type: array
+          items:
+            type: string
+            enum: [humanitarian, commercial]
+        createdAt:
+          type: string
+          format: date-time
+
+    ProviderInput:
+      type: object
+      required: [companyName, operatingModes]
+      properties:
+        companyName:
+          type: string
+          minLength: 1
+        contactEmail:
+          type: string
+          format: email
+        description:
+          type: string
+        operatingModes:
+          type: array
+          items:
+            type: string
+            enum: [humanitarian, commercial]
+          minItems: 1
+
+    ProviderPatch:
+      type: object
+      properties:
+        contactEmail:
+          type: string
+          format: email
+        description:
+          type: string
+        operatingModes:
+          type: array
+          items:
+            type: string
+            enum: [humanitarian, commercial]
+
+    ProviderSummary:
+      type: object
+      required: [id, companyName, status, operatingModes]
+      properties:
+        id:
+          type: string
+        companyName:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        operatingModes:
+          type: array
+          items:
+            type: string
+            enum: [humanitarian, commercial]
+        activeDriverCount:
+          type: integer
+        rating:
+          type: ["number", "null"]
+
+    ProviderPerformance:
+      type: object
+      required: [providerId, companyName, completionRate, onTimeRate, deliveriesCompleted, zonesServed]
+      properties:
+        providerId:
+          type: string
+        companyName:
+          type: string
+        completionRate:
+          type: number
+        onTimeRate:
+          type: number
+        deliveriesCompleted:
+          type: integer
+        zonesServed:
+          type: integer
+
+    HumanitarianDashboard:
+      type: object
+      required: [taskStats, driverStats, zoneStats]
+      properties:
+        taskStats:
+          type: object
+          required: [total, pending, inProgress, delivered]
+          properties:
+            total:
+              type: integer
+            pending:
+              type: integer
+            inProgress:
+              type: integer
+            delivered:
+              type: integer
+        driverStats:
+          type: object
+          required: [total, active, idle]
+          properties:
+            total:
+              type: integer
+            active:
+              type: integer
+            idle:
+              type: integer
+        zoneStats:
+          type: object
+          required: [covered, highPriority]
+          properties:
+            covered:
+              type: integer
+            highPriority:
+              type: integer
+
+    CommercialDashboard:
+      type: object
+      required: [revenueTotal, platformFeeTotal, pendingDisbursement, activeSubscriptions, ordersThisMonth]
+      properties:
+        revenueTotal:
+          type: number
+        platformFeeTotal:
+          type: number
+        pendingDisbursement:
+          type: number
+        activeSubscriptions:
+          type: integer
+        ordersThisMonth:
+          type: integer
+        topSubscriptionPlans:
+          type: array
+          items:
+            type: object
+            required: [planName, subscriberCount]
+            properties:
+              planName:
+                type: string
+              subscriberCount:
+                type: integer
+
+    ProviderNgoTask:
+      type: object
+      required: [id, distributionTaskId, providerId, status, createdAt]
+      properties:
+        id:
+          type: string
+        distributionTaskId:
+          type: string
+        providerId:
+          type: string
+        zoneId:
+          type: ["string", "null"]
+        zoneName:
+          type: ["string", "null"]
+        quantityLiters:
+          type: ["number", "null"]
+        scheduledAt:
+          type: ["string", "null"]
+          format: date-time
+        status:
+          type: string
+          enum: [pending, acknowledged, in_progress, delivered]
+        assignedDriverId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    DriverAssignment:
+      type: object
+      required: [driverId]
+      properties:
+        driverId:
+          type: string
+
+    DriverInviteInput:
+      type: object
+      required: [driverIdentifier]
+      properties:
+        driverIdentifier:
+          type: string
+          description: Driver user ID or phone number
+
+    DriverInvitation:
+      type: object
+      required: [id, taskId, driverIdentifier, status, createdAt]
+      properties:
+        id:
+          type: string
+        taskId:
+          type: string
+        driverIdentifier:
+          type: string
+        driverId:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, accepted, rejected, expired]
+        createdAt:
+          type: string
+          format: date-time
+
+    ProviderMapData:
+      type: object
+      required: [drivers, zones]
+      properties:
+        drivers:
+          type: array
+          items:
+            type: object
+            required: [driverId, driverName, lat, lng, taskId, taskStatus]
+            properties:
+              driverId:
+                type: string
+              driverName:
+                type: string
+              lat:
+                type: number
+              lng:
+                type: number
+              taskId:
+                type: ["string", "null"]
+              taskStatus:
+                type: ["string", "null"]
+              updatedAt:
+                type: string
+                format: date-time
+        zones:
+          type: array
+          items:
+            $ref: '#/components/schemas/ZoneHeatmapEntry'
+        proofs:
+          type: array
+          items:
+            type: object
+            required: [proofId, taskId, photoUrl, submittedAt]
+            properties:
+              proofId:
+                type: string
+              taskId:
+                type: string
+              photoUrl:
+                type: string
+              submittedAt:
+                type: string
+                format: date-time
+
+    # ── Drivers ──────────────────────────────────────────────────────────────
+    Driver:
+      type: object
+      required: [id, userId, driverType, status, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        driverType:
+          type: string
+          enum: [owned, independent]
+        providerId:
+          type: ["string", "null"]
+        providerName:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, active, inactive, rejected]
+        phone:
+          type: ["string", "null"]
+        vehicleType:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    DriverInput:
+      type: object
+      required: [driverType]
+      properties:
+        driverType:
+          type: string
+          enum: [owned, independent]
+        providerId:
+          type: string
+          description: Required for owned drivers
+        phone:
+          type: string
+        vehicleType:
+          type: string
+
+    DriverSummary:
+      type: object
+      required: [id, userId, driverType, status]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        driverType:
+          type: string
+          enum: [owned, independent]
+        status:
+          type: string
+          enum: [pending, active, inactive, rejected]
+        phone:
+          type: ["string", "null"]
+        vehicleType:
+          type: ["string", "null"]
+        activeTaskId:
+          type: ["string", "null"]
+
+    DriverTask:
+      type: object
+      required: [id, status, taskType, createdAt]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [pending, invitation_pending, in_progress, delivered, rejected]
+        taskType:
+          type: string
+          enum: [humanitarian, commercial]
+        zoneId:
+          type: ["string", "null"]
+        zoneName:
+          type: ["string", "null"]
+        providerId:
+          type: ["string", "null"]
+        providerName:
+          type: ["string", "null"]
+        scheduledAt:
+          type: ["string", "null"]
+          format: date-time
+        quantityLiters:
+          type: ["number", "null"]
+        routeData:
+          type: object
+          additionalProperties: true
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    DriverDashboard:
+      type: object
+      required: [completedToday, completedTotal, onTimeRate, activeTask]
+      properties:
+        completedToday:
+          type: integer
+        completedTotal:
+          type: integer
+        onTimeRate:
+          type: number
+        activeTask:
+          oneOf:
+            - $ref: '#/components/schemas/DriverTask'
+            - type: 'null'
+
+    # ── Proof ──────────────────────────────────────────────────────────────
+    ProofInput:
+      type: object
+      required: [photoUrl]
+      properties:
+        photoUrl:
+          type: string
+        signatureUrl:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    DeliveryProof:
+      type: object
+      required: [id, taskId, photoUrl, submittedAt]
+      properties:
+        id:
+          type: string
+        taskId:
+          type: string
+        photoUrl:
+          type: string
+        signatureUrl:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        submittedAt:
+          type: string
+          format: date-time
+
+    # ── GPS ──────────────────────────────────────────────────────────────
+    GpsPosition:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        accuracy:
+          type: ["number", "null"]
+        taskId:
+          type: ["string", "null"]
+        recordedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    LiveDriverLocation:
+      type: object
+      required: [driverId, lat, lng, updatedAt]
+      properties:
+        driverId:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        etaMinutes:
+          type: ["integer", "null"]
+        updatedAt:
+          type: string
+          format: date-time
+
+    # ── Citizens ──────────────────────────────────────────────────────────
+    Citizen:
+      type: object
+      required: [id, userId, zoneId, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        zoneId:
+          type: string
+        zoneName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    CitizenInput:
+      type: object
+      required: [zoneId]
+      properties:
+        zoneId:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+
+    CitizenZoneStatus:
+      type: object
+      required: [zoneId, zoneName, priorityScore, signalCount]
+      properties:
+        zoneId:
+          type: string
+        zoneName:
+          type: string
+        priorityScore:
+          type: number
+        signalCount:
+          type: integer
+        lastDeliveryAt:
+          type: ["string", "null"]
+          format: date-time
+        nextScheduledAt:
+          type: ["string", "null"]
+          format: date-time
+        activeNgoProviders:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderSummary'
+
+    SignalResponse:
+      type: object
+      required: [signalId, updatedPriorityScore, zoneId]
+      properties:
+        signalId:
+          type: string
+        zoneId:
+          type: string
+        updatedPriorityScore:
+          type: number
+        signalCount:
+          type: integer
+
+    # ── Subscriptions & Orders ──────────────────────────────────────────────
+    Subscription:
+      type: object
+      required: [id, citizenId, providerId, planName, status, createdAt]
+      properties:
+        id:
+          type: string
+        citizenId:
+          type: string
+        providerId:
+          type: string
+        providerName:
+          type: ["string", "null"]
+        planName:
+          type: string
+        pricePerDelivery:
+          type: ["number", "null"]
+        frequency:
+          type: ["string", "null"]
+          enum: [weekly, biweekly, monthly, null]
+        status:
+          type: string
+          enum: [active, cancelled, paused]
+        createdAt:
+          type: string
+          format: date-time
+
+    SubscriptionInput:
+      type: object
+      required: [providerId, planName]
+      properties:
+        providerId:
+          type: string
+        planName:
+          type: string
+        frequency:
+          type: string
+          enum: [weekly, biweekly, monthly]
+        mockPaymentToken:
+          type: string
+          description: Mock payment token (no real charge)
+
+    DeliveryOrder:
+      type: object
+      required: [id, citizenId, providerId, status, createdAt]
+      properties:
+        id:
+          type: string
+        citizenId:
+          type: string
+        providerId:
+          type: string
+        providerName:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, dispatched, delivered, cancelled]
+        quantityLiters:
+          type: ["number", "null"]
+        totalAmount:
+          type: ["number", "null"]
+        taskId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    DeliveryOrderInput:
+      type: object
+      required: [providerId]
+      properties:
+        providerId:
+          type: string
+        quantityLiters:
+          type: number
+        mockPaymentToken:
+          type: string
+          description: Mock payment token (no real charge)
+
+    # ── Deliveries ──────────────────────────────────────────────────────────
+    DeliverySummary:
+      type: object
+      required: [id, taskId, chain, status, deliveredAt]
+      properties:
+        id:
+          type: string
+        taskId:
+          type: string
+        chain:
+          type: string
+          enum: [humanitarian, commercial]
+        status:
+          type: string
+          enum: [pending, in_progress, delivered]
+        providerName:
+          type: ["string", "null"]
+        driverName:
+          type: ["string", "null"]
+        zoneId:
+          type: ["string", "null"]
+        zoneName:
+          type: ["string", "null"]
+        deliveredAt:
+          type: ["string", "null"]
+          format: date-time
+
+    DeliveryDetail:
+      type: object
+      required: [id, taskId, chain, status]
+      properties:
+        id:
+          type: string
+        taskId:
+          type: string
+        chain:
+          type: string
+          enum: [humanitarian, commercial]
+        status:
+          type: string
+          enum: [pending, in_progress, delivered]
+        providerName:
+          type: ["string", "null"]
+        driverName:
+          type: ["string", "null"]
+        zoneId:
+          type: ["string", "null"]
+        zoneName:
+          type: ["string", "null"]
+        deliveredAt:
+          type: ["string", "null"]
+          format: date-time
+        proof:
+          oneOf:
+            - $ref: '#/components/schemas/DeliveryProof'
+            - type: 'null'
+
+    # ── Notifications ──────────────────────────────────────────────────────
+    Notification:
+      type: object
+      required: [id, userId, type, message, read, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        type:
+          type: string
+          enum: [driver_assigned, driver_en_route, delivery_complete, task_assigned, order_placed, proof_submitted, application_approved, application_rejected, performance_alert, task_invitation, route_updated]
+        message:
+          type: string
+        entityId:
+          type: ["string", "null"]
+        entityType:
+          type: ["string", "null"]
+        read:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    # ── Payments ────────────────────────────────────────────────────────────
+    Payment:
+      type: object
+      required: [id, userId, amount, currency, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [pending, completed, failed, refunded]
+        relatedType:
+          type: ["string", "null"]
+          enum: [delivery_order, subscription, null]
+        relatedId:
+          type: ["string", "null"]
+        mockPaymentToken:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PaymentInput:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+        currency:
+          type: string
+          default: USD
+        relatedType:
+          type: string
+          enum: [delivery_order, subscription]
+        relatedId:
+          type: string

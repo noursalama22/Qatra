@@ -1,0 +1,1 @@
+{"version":3,"file":"signalResponse.d.ts","sourceRoot":"","sources":["../../../src/generated/types/signalResponse.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,cAAc;IAC7B,QAAQ,EAAE,MAAM,CAAC;IACjB,MAAM,EAAE,MAAM,CAAC;IACf,oBAAoB,EAAE,MAAM,CAAC;IAC7B,WAAW,CAAC,EAAE,MAAM,CAAC;CACtB"}

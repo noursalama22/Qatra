@@ -1,0 +1,1 @@
+{"version":3,"file":"subscriptionInput.d.ts","sourceRoot":"","sources":["../../../src/generated/types/subscriptionInput.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,0BAA0B,EAAE,MAAM,8BAA8B,CAAC;AAE/E,MAAM,WAAW,iBAAiB;IAChC,UAAU,EAAE,MAAM,CAAC;IACnB,QAAQ,EAAE,MAAM,CAAC;IACjB,SAAS,CAAC,EAAE,0BAA0B,CAAC;IACvC,0CAA0C;IAC1C,gBAAgB,CAAC,EAAE,MAAM,CAAC;CAC3B"}

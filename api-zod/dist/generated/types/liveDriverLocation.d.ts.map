@@ -1,0 +1,1 @@
+{"version":3,"file":"liveDriverLocation.d.ts","sourceRoot":"","sources":["../../../src/generated/types/liveDriverLocation.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,kBAAkB;IACjC,QAAQ,EAAE,MAAM,CAAC;IACjB,GAAG,EAAE,MAAM,CAAC;IACZ,GAAG,EAAE,MAAM,CAAC;IACZ,gBAAgB;IAChB,UAAU,CAAC,EAAE,MAAM,GAAG,IAAI,CAAC;IAC3B,SAAS,EAAE,IAAI,CAAC;CACjB"}

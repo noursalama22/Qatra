@@ -1,0 +1,1 @@
+{"version":3,"file":"distributionTaskInput.d.ts","sourceRoot":"","sources":["../../../src/generated/types/distributionTaskInput.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,qBAAqB;IACpC,MAAM,EAAE,MAAM,CAAC;IACf,iBAAiB;IACjB,cAAc,EAAE,MAAM,CAAC;IACvB,WAAW,EAAE,IAAI,CAAC;IAClB,kBAAkB;IAClB,mBAAmB,EAAE,MAAM,EAAE,CAAC;IAC9B,KAAK,CAAC,EAAE,MAAM,CAAC;CAChB"}

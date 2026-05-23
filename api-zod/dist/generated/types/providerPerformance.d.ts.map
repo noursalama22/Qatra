@@ -1,0 +1,1 @@
+{"version":3,"file":"providerPerformance.d.ts","sourceRoot":"","sources":["../../../src/generated/types/providerPerformance.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,mBAAmB;IAClC,UAAU,EAAE,MAAM,CAAC;IACnB,WAAW,EAAE,MAAM,CAAC;IACpB,cAAc,EAAE,MAAM,CAAC;IACvB,UAAU,EAAE,MAAM,CAAC;IACnB,mBAAmB,EAAE,MAAM,CAAC;IAC5B,WAAW,EAAE,MAAM,CAAC;CACrB"}
