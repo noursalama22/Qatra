@@ -1,0 +1,31 @@
+{
+  "name": "workspace",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "tsx server/index.ts",
+    "client": "cd client && npx vite"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Qatra v3 — Water Delivery Platform",
+  "dependencies": {
+    "@types/connect-pg-simple": "^7.0.3",
+    "@types/express-session": "^1.19.0",
+    "@types/memoizee": "^0.4.12",
+    "@types/passport": "^1.0.17",
+    "concurrently": "^9.2.1",
+    "connect-pg-simple": "^10.0.0",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "memoizee": "^0.4.17",
+    "openid-client": "^6.8.4",
+    "passport": "^0.7.0",
+    "tsx": "^4.22.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6"
+  }
+}
