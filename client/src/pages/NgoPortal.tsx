@@ -2,23 +2,37 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import "leaflet/dist/leaflet.css";
 import type { Map as LeafletMap, LayerGroup } from "leaflet";
 
+const MY_NGO_ID = "seed-n1";
+
 type Zone = {
   id: string; name: string; status: string; populationEstimate: number;
   signalCount: number; lastDeliveryAt: string | null; description: string;
   boundary: [number, number][] | null;
 };
 type Task = {
-  id: string; zoneId: string; status: string; quantityLiters: string;
-  scheduledAt: string; notes: string | null; assignedProviderIds: string[];
+  id: string; ngoId: string; zoneId: string; status: string;
+  quantityLiters: string; scheduledAt: string; notes: string | null;
+  assignedProviderIds: string[];
 };
 type Provider = { id: string; companyName: string; operatingModes: string[]; status: string };
 
-const MOCK_PROVIDER_INFO = [
-  { pricePerLiter: 0.45, dailyCapacityK: 80,  source: "محطة تحلية الشفاء"    },
-  { pricePerLiter: 0.38, dailyCapacityK: 120, source: "محطة رفح المركزية"   },
-  { pricePerLiter: 0.52, dailyCapacityK: 50,  source: "محطة خان يونس"       },
-  { pricePerLiter: 0.41, dailyCapacityK: 95,  source: "محطة دير البلح"      },
+const PROVIDER_EXT: Record<string, {
+  trustScore: number; completedJobs: number; freeFleet: number;
+  pricePerLiter: number; source: string;
+}> = {
+  "seed-p1": { trustScore: 4.9, completedJobs: 60, freeFleet: 3, pricePerLiter: 0.045, source: "محطة تحلية الشفاء" },
+  "seed-p2": { trustScore: 4.6, completedJobs: 38, freeFleet: 2, pricePerLiter: 0.038, source: "محطة رفح المركزية" },
+};
+
+const TIME_SLOTS = [
+  { h: 6,  label: "6–8 صباحاً"  },
+  { h: 8,  label: "8–10 صباحاً" },
+  { h: 10, label: "10–12 ظهراً" },
+  { h: 12, label: "12–2 ظهراً"  },
+  { h: 14, label: "2–4 مساءً"   },
+  { h: 16, label: "4–6 مساءً"   },
 ];
+const AR_DAYS = ["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
 
 const PIPELINE_STEPS = [
   { key: "pending",     label: "بانتظار الموافقة", icon: "⏳", color: "#f59e0b" },
@@ -27,88 +41,72 @@ const PIPELINE_STEPS = [
   { key: "arrived",     label: "وصل الموقع",        icon: "📍", color: "#0ea5e9" },
   { key: "delivered",   label: "اكتمل التوزيع",     icon: "✅", color: "#10b981" },
 ];
-
 const MOCK_DRIVERS = ["أحمد — شاحنة 4022", "محمود — شاحنة 1887", "خالد — شاحنة 3301", "يوسف — شاحنة 2044"];
 
-const priorityScore = (z: Zone) => {
+function dayKey(d: Date): string { return d.toISOString().slice(0, 10); }
+function getNextDays(n: number): Date[] {
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() + i); d.setHours(0, 0, 0, 0); return d;
+  });
+}
+
+function priorityScore(z: Zone) {
   const signals = Math.min(z.signalCount / 100, 1) * 40;
   const days = z.lastDeliveryAt
     ? Math.min((Date.now() - new Date(z.lastDeliveryAt).getTime()) / 86400000 / 30, 1) * 40 : 40;
   const pop = Math.min((z.populationEstimate ?? 0) / 20000, 1) * 20;
   return Math.round(signals + days + pop);
-};
-
-const priorityColor = (score: number) =>
-  score > 70 ? "#dc2626" : score > 50 ? "#ea580c" : score > 30 ? "#f59e0b" : "#10b981";
-
+}
+function priorityColor(score: number) {
+  return score > 70 ? "#dc2626" : score > 50 ? "#ea580c" : score > 30 ? "#f59e0b" : "#10b981";
+}
 const centroid = (pts: [number, number][]): [number, number] => {
   if (!pts?.length) return [31.42, 34.37];
   return [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
 };
 
-// ── Schedule helpers ──────────────────────────────────────────────────────────
-const TIME_SLOTS = [
-  { h: 6,  label: "6 صباحاً"  },
-  { h: 8,  label: "8 صباحاً"  },
-  { h: 10, label: "10 صباحاً" },
-  { h: 12, label: "12 ظهراً"  },
-  { h: 14, label: "2 مساءً"   },
-  { h: 16, label: "4 مساءً"   },
-];
-const AR_DAYS = ["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
-
-function getNextDays(n: number): Date[] {
-  return Array.from({ length: n }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() + i); d.setHours(0,0,0,0); return d;
-  });
-}
-function dayKey(d: Date): string { return d.toISOString().slice(0, 10); }
-function tasksInSlot(all: Task[], day: Date, slotH: number): Task[] {
-  const dk = dayKey(day);
-  return all.filter(t => {
-    const dt = new Date(t.scheduledAt);
-    return dayKey(dt) === dk && dt.getHours() >= slotH && dt.getHours() < slotH + 2;
-  });
-}
-function slotConflict(all: Task[], zoneId: string, dayStr: string, slotH: number): boolean {
-  return all.some(t => {
+type SlotState = "available" | "locked" | "mine";
+function getSlotState(tasks: Task[], zoneId: string, dayStr: string, slotH: number): SlotState {
+  const active = tasks.filter(t => {
     if (t.zoneId !== zoneId) return false;
+    if (t.status === "cancelled" || t.status === "delivered") return false;
+    const dt = new Date(t.scheduledAt);
+    return dayKey(dt) === dayStr && dt.getHours() >= slotH && dt.getHours() < slotH + 2;
+  });
+  if (!active.length) return "available";
+  if (active.some(t => t.ngoId !== MY_NGO_ID)) return "locked";
+  return "mine";
+}
+function getSlotTask(tasks: Task[], zoneId: string, dayStr: string, slotH: number): Task | undefined {
+  return tasks.find(t => {
+    if (t.zoneId !== zoneId || t.status === "cancelled") return false;
     const dt = new Date(t.scheduledAt);
     return dayKey(dt) === dayStr && dt.getHours() >= slotH && dt.getHours() < slotH + 2;
   });
 }
 
 export default function NgoPortal() {
-  const [tab, setTab] = useState<"dashboard" | "pipeline" | "verify" | "schedule">("dashboard");
-  const [zones,     setZones]     = useState<Zone[]>([]);
-  const [tasks,     setTasks]     = useState<Task[]>([]);
+  const [tab, setTab] = useState<"dashboard" | "pipeline" | "verify">("dashboard");
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
-  const [toast,     setToast]     = useState<string | null>(null);
-
+  const [toast, setToast] = useState<string | null>(null);
   const [wallet, setWallet] = useState({ available: 10000, escrow: 0 });
 
-  // Zone + marketplace flow
-  const [selectedZone,     setSelectedZone]     = useState<Zone | null>(null);
-  const [drawerStep,       setDrawerStep]       = useState<"marketplace" | "form" | "success" | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
-  const [contractQty,      setContractQty]      = useState("");
-  const [contractDate,     setContractDate]     = useState("");
-  const [submitting,       setSubmitting]       = useState(false);
+  // Calendar / Scheduling
+  const [calZone, setCalZone] = useState<Zone | null>(null);
+  const [drawerSlot, setDrawerSlot] = useState<{ day: Date; slotH: number } | null>(null);
+  const [drawerQty, setDrawerQty] = useState("");
+  const [drawerProvider, setDrawerProvider] = useState<Provider | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
+  // Proof/Verify
+  const [proofTask, setProofTask] = useState<Task | null>(null);
 
-  // Proof of delivery
-  const [proofTask,  setProofTask]  = useState<Task | null>(null);
-  const [proofOpen,  setProofOpen]  = useState(false);
-
-  // Schedule tab state
-  const [scheduleTask, setScheduleTask] = useState<Task | null>(null);
-  const [schedDay,     setSchedDay]     = useState("");
-  const [schedTime,    setSchedTime]    = useState(8);
-
-  // Map
   const mapDivRef = useRef<HTMLDivElement>(null);
-  const mapRef    = useRef<LeafletMap | null>(null);
-  const layerRef  = useRef<LayerGroup | null>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
+  const layerRef = useRef<LayerGroup | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
 
@@ -120,13 +118,12 @@ export default function NgoPortal() {
     ]);
     setZones(z.data ?? []);
     setTasks(t.data ?? []);
-    setProviders((p.data ?? []).filter((pr: Provider) =>
-      (pr.operatingModes ?? []).includes("humanitarian") && pr.status === "approved"));
+    setProviders((p.data ?? []).filter((pr: Provider) => pr.status === "approved"));
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Map init ──────────────────────────────────────────────────────────────
+  // Map init (dashboard tab)
   useEffect(() => {
     if (tab !== "dashboard" || !mapDivRef.current || mapRef.current) return;
     let cancelled = false;
@@ -137,8 +134,8 @@ export default function NgoPortal() {
         delete (L.Icon.Default.prototype as any)._getIconUrl;
         L.Icon.Default.mergeOptions({
           iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-          iconUrl:       "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-          shadowUrl:     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+          iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+          shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
         });
         const map = L.map(mapDivRef.current!, { center: [31.42, 34.37], zoom: 11 });
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -148,102 +145,126 @@ export default function NgoPortal() {
         mapRef.current = map;
       });
     }, 120);
-    return () => { cancelled = true; clearTimeout(t); if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
+    return () => {
+      cancelled = true; clearTimeout(t);
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+    };
   }, [tab]);
 
-  // ── Draw zones ────────────────────────────────────────────────────────────
+  // Draw zones on map
   useEffect(() => {
     if (!zones.length || !mapRef.current || !layerRef.current) return;
     import("leaflet").then(L => {
       if (!layerRef.current) return;
       layerRef.current.clearLayers();
-      [...zones].sort((a, b) => priorityScore(b) - priorityScore(a)).forEach(zone => {
+      zones.forEach(zone => {
         const score = priorityScore(zone);
         const color = priorityColor(score);
+        const isSelected = calZone?.id === zone.id;
         const center = zone.boundary ? centroid(zone.boundary) : [31.42, 34.37] as [number, number];
         if (zone.boundary && zone.boundary.length > 2) {
-          const poly = L.polygon(zone.boundary, { color, weight: 2.5, fillColor: color, fillOpacity: 0.22 }).addTo(layerRef.current!);
-          poly.on("click", () => openZone(zone));
-          poly.bindTooltip(`<b>${zone.name}</b><br/>أولوية: ${score}`, { sticky: true });
+          const poly = L.polygon(zone.boundary, {
+            color: isSelected ? "#2563eb" : color,
+            weight: isSelected ? 3.5 : 2,
+            fillColor: isSelected ? "#2563eb" : color,
+            fillOpacity: isSelected ? 0.35 : 0.18,
+          }).addTo(layerRef.current!);
+          poly.on("click", () => selectZone(zone));
+          poly.bindTooltip(`<b>${zone.name}</b><br/>انقر لعرض التقويم`, { sticky: true });
         }
         const icon = L.divIcon({
-          html: `<div style="background:${color};color:#fff;border-radius:50%;width:42px;height:42px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:800;box-shadow:0 2px 10px ${color}88;border:2px solid #fff;cursor:pointer"><span>${score}</span><span style="font-size:8px;opacity:.9">أولوية</span></div>`,
-          className: "", iconSize: [42, 42], iconAnchor: [21, 21],
+          html: `<div style="
+            background:${isSelected ? "#2563eb" : color};
+            color:#fff;border-radius:50%;width:44px;height:44px;
+            display:flex;flex-direction:column;align-items:center;justify-content:center;
+            font-size:11px;font-weight:800;
+            box-shadow:0 2px 10px ${isSelected ? "#2563eb88" : color + "88"};
+            border:${isSelected ? "3px solid #fff" : "2px solid #fff"};
+            cursor:pointer;transition:all .2s;
+          "><span>${score}</span><span style="font-size:8px;opacity:.9">أولوية</span></div>`,
+          className: "", iconSize: [44, 44], iconAnchor: [22, 22],
         });
-        L.marker(center as [number, number], { icon }).addTo(layerRef.current!).on("click", () => openZone(zone));
+        L.marker(center as [number, number], { icon }).addTo(layerRef.current!).on("click", () => selectZone(zone));
       });
     });
-  }, [zones]);
+  }, [zones, calZone]);
 
-  const openZone = (zone: Zone) => {
-    setSelectedZone(zone);
-    setDrawerStep("marketplace");
-    setSelectedProvider(null);
-    setContractQty("");
-    setContractDate("");
+  const selectZone = (zone: Zone) => {
+    setCalZone(zone);
+    setDrawerSlot(null);
+    setDrawerQty("");
+    setDrawerProvider(null);
+    setSubmitted(false);
   };
 
-  const closeDrawer = () => { setSelectedZone(null); setDrawerStep(null); };
-
-  const providerMock = (idx: number) => MOCK_PROVIDER_INFO[idx % MOCK_PROVIDER_INFO.length];
-
-  const calcCost = () => {
-    if (!selectedProvider || !contractQty) return 0;
-    return Number(contractQty) * providerMock(providers.indexOf(selectedProvider)).pricePerLiter;
+  const openSlot = (day: Date, slotH: number) => {
+    setDrawerSlot({ day, slotH });
+    setDrawerQty("");
+    setDrawerProvider(null);
+    setSubmitted(false);
   };
 
-  const submitContract = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedZone || !selectedProvider) return;
-    const cost = calcCost();
+  const closeDrawer = () => {
+    setDrawerSlot(null);
+    setDrawerQty("");
+    setDrawerProvider(null);
+    setSubmitted(false);
+  };
+
+  const days = getNextDays(7);
+
+  // Compute provider cards sorted: cheapest + highest rated
+  const provExt = providers.map(p => ({ ...p, ext: PROVIDER_EXT[p.id] })).filter(p => p.ext);
+  const minPrice = Math.min(...provExt.map(p => p.ext.pricePerLiter));
+  const maxScore = Math.max(...provExt.map(p => p.ext.trustScore));
+  const qty = Number(drawerQty) || 0;
+
+  const confirmSchedule = async () => {
+    if (!calZone || !drawerSlot || !drawerProvider || !drawerQty) return;
+    const ext = PROVIDER_EXT[drawerProvider.id];
+    const cost = qty * (ext?.pricePerLiter ?? 0.04);
     if (cost > wallet.available) { showToast("❌ الرصيد غير كافٍ"); return; }
     setSubmitting(true);
+    const dt = new Date(drawerSlot.day);
+    dt.setHours(drawerSlot.slotH, 0, 0, 0);
     await fetch("/api/tasks", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ngoId: "seed-n1", zoneId: selectedZone.id, quantityLiters: contractQty, scheduledAt: contractDate, notes: `مزود: ${selectedProvider.companyName}` }),
+      body: JSON.stringify({
+        ngoId: MY_NGO_ID, zoneId: calZone.id,
+        quantityLiters: drawerQty,
+        scheduledAt: dt.toISOString(),
+        notes: `مزود: ${drawerProvider.companyName}`,
+      }),
     });
     setWallet(w => ({ available: w.available - cost, escrow: w.escrow + cost }));
     await load();
     setSubmitting(false);
-    setDrawerStep("success");
+    setSubmitted(true);
+    showToast("✅ تم تأكيد الجدول — المبلغ في حساب الضمان");
+    setTimeout(closeDrawer, 1800);
   };
 
-
   const approveDelivery = (task: Task) => {
-    const cost = Number(task.quantityLiters) * 0.45;
+    const cost = Number(task.quantityLiters) * 0.045;
     setWallet(w => ({ ...w, escrow: Math.max(0, w.escrow - cost) }));
-    setProofOpen(false); setProofTask(null);
+    setProofTask(null);
     showToast("✅ تم الاعتماد — حُوِّل المبلغ لمحفظة المزود وصدر تقرير رسمي");
   };
 
-  const sortedZones  = [...zones].sort((a, b) => priorityScore(b) - priorityScore(a));
-  const activeTasks  = tasks.filter(t => t.status === "in_progress" || t.status === "pending");
-  const deliveredTasks = tasks.filter(t => t.status === "delivered");
   const totalSignals = zones.reduce((s, z) => s + (z.signalCount ?? 0), 0);
-
-  const saveSchedule = async () => {
-    if (!scheduleTask || !schedDay) return;
-    const dt = new Date(`${schedDay}T${String(schedTime).padStart(2, "0")}:00:00`);
-    await fetch(`/api/tasks/${scheduleTask.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scheduledAt: dt.toISOString() }),
-    });
-    await load();
-    setScheduleTask(null); setSchedDay(""); setSchedTime(8);
-    showToast("📅 تم حفظ الموعد — المزود والمواطن سيتم إبلاغهم تلقائياً");
-    setTab("pipeline");
-  };
+  const activeTasks = tasks.filter(t => t.status === "in_progress" || t.status === "pending");
+  const deliveredTasks = tasks.filter(t => t.status === "delivered");
 
   return (
     <div className="portal ngo-portal" dir="rtl">
       {toast && <div className="action-toast">{toast}</div>}
 
-      {/* ── Wallet Header ─────────────────────────────────────── */}
+      {/* ── Header ─────────────────────────────────────────────── */}
       <div className="ngo-header">
         <div className="ngo-header-left">
           <div className="portal-role-badge">❤️ المنظمة الإنسانية</div>
-          <h2 className="portal-title">WaterAid Syria</h2>
-          <p className="portal-subtitle">منصة توزيع المياه الإنسانية</p>
+          <h2 className="portal-title">برنامج WASH غزة</h2>
+          <p className="portal-subtitle">جدولة التوزيع · منع التضارب · ضمان العدالة</p>
         </div>
         <div className="ngo-wallet">
           <div className="wallet-block">
@@ -252,546 +273,424 @@ export default function NgoPortal() {
           </div>
           <div className="wallet-divider" />
           <div className="wallet-block">
-            <span className="wallet-label">محجوز للضمان</span>
-            <span className="wallet-amount" style={{ color: "#f59e0b" }}>${wallet.escrow.toLocaleString()}</span>
+            <span className="wallet-label">حساب الضمان</span>
+            <span className="wallet-amount" style={{ color: "#fcd34d" }}>${wallet.escrow.toLocaleString()}</span>
           </div>
           <div className="wallet-divider" />
           <div className="wallet-block">
             <span className="wallet-label">إشارات احتياج</span>
-            <span className="wallet-amount" style={{ color: "#ef4444" }}>{totalSignals}</span>
+            <span className="wallet-amount" style={{ color: "#fca5a5" }}>{totalSignals.toLocaleString()}</span>
           </div>
         </div>
       </div>
 
       {/* ── Tabs ──────────────────────────────────────────────── */}
       <div className="portal-tabs">
-        <button className={`ptab ${tab === "dashboard" ? "ptab-active" : ""}`} onClick={() => setTab("dashboard")}>🗺️ لوحة التحكم</button>
-        <button className={`ptab ${tab === "pipeline"  ? "ptab-active" : ""}`} onClick={() => setTab("pipeline")}>
+        <button className={`ptab ${tab === "dashboard" ? "ptab-active" : ""}`} onClick={() => setTab("dashboard")}>
+          🗺️ جدولة التوزيع
+        </button>
+        <button className={`ptab ${tab === "pipeline" ? "ptab-active" : ""}`} onClick={() => setTab("pipeline")}>
           🔄 المسار النشط {activeTasks.length > 0 && <span className="tab-badge">{activeTasks.length}</span>}
         </button>
-        <button className={`ptab ${tab === "verify"    ? "ptab-active" : ""}`} onClick={() => setTab("verify")}>
+        <button className={`ptab ${tab === "verify" ? "ptab-active" : ""}`} onClick={() => setTab("verify")}>
           ✅ التوثيق {deliveredTasks.length > 0 && <span className="tab-badge tab-badge-green">{deliveredTasks.length}</span>}
         </button>
-        <button className={`ptab ${tab === "schedule"  ? "ptab-active" : ""}`} onClick={() => setTab("schedule")}>
-          📅 جدول المواعيد
-        </button>
-      </div>
-
-      <div className="portal-body" style={{ padding: (tab === "dashboard" || tab === "schedule") ? 0 : undefined, maxWidth: (tab === "dashboard" || tab === "schedule") ? "none" : undefined }}>
-
-        {/* ════════════════════════════════════════
-            TAB 1 · DASHBOARD — MAP + PRIORITY TABLE
-        ════════════════════════════════════════ */}
-        {tab === "dashboard" && (
-          <div className="ngo-dashboard">
-            {/* Priority table — RIGHT column (RTL: appears on right) */}
-            <div className="ngo-zone-table">
-              <div className="ngo-zone-table-header">
-                <span style={{ fontWeight:700,fontSize:13 }}>📊 الأولوية تنازلياً</span>
-                <span style={{ fontSize:11,color:"#64748b" }}>{zones.length} منطقة</span>
-              </div>
-              {sortedZones.map((z, i) => {
-                const score = priorityScore(z);
-                const color = priorityColor(score);
-                const zt    = tasks.filter(t => t.zoneId === z.id);
-                const isSel = selectedZone?.id === z.id;
-                return (
-                  <div key={z.id}
-                    className={`ngo-zone-row ${isSel ? "ngo-zone-row-selected" : ""}`}
-                    onClick={() => openZone(z)}
-                    style={{ borderRight: `4px solid ${color}` }}>
-                    <div className="ngo-zone-rank" style={{ color }}>{i + 1}</div>
-                    <div className="ngo-zone-info">
-                      <div className="ngo-zone-name">{z.name}</div>
-                      <div className="ngo-zone-meta">
-                        🆘 {z.signalCount} إشارة · 👥 {(z.populationEstimate??0).toLocaleString()}
-                        {z.lastDeliveryAt && <><br/>📅 {new Date(z.lastDeliveryAt).toLocaleDateString("ar-SY")}</>}
-                      </div>
-                    </div>
-                    <div style={{ display:"flex",flexDirection:"column",alignItems:"center",background:color+"18",color,padding:"5px 8px",borderRadius:8,minWidth:42,flexShrink:0 }}>
-                      <span style={{ fontWeight:800,fontSize:16 }}>{score}</span>
-                      <span style={{ fontSize:8 }}>أولوية</span>
-                    </div>
-                    {(zt.filter(t=>t.status==="pending").length>0 || zt.filter(t=>t.status==="in_progress").length>0) && (
-                      <div style={{ display:"flex",flexDirection:"column",gap:3,flexShrink:0 }}>
-                        {zt.filter(t=>t.status==="pending").length>0    && <span className="zone-task-chip chip-pending"  style={{fontSize:9}}>{zt.filter(t=>t.status==="pending").length}م</span>}
-                        {zt.filter(t=>t.status==="in_progress").length>0 && <span className="zone-task-chip chip-active" style={{fontSize:9}}>{zt.filter(t=>t.status==="in_progress").length}ج</span>}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Map — LEFT column */}
-            <div className="ngo-map-col">
-            <div className="ngo-map-wrap">
-              <div ref={mapDivRef} className="ngo-map" />
-              <div className="ngo-map-legend">
-                <div style={{ fontWeight: 700, fontSize: 11, color: "#1e293b", marginBottom: 6 }}>خريطة الأولوية</div>
-                {([["#dc2626","عالية جداً (70+)"],["#ea580c","عالية (50-70)"],["#f59e0b","متوسطة (30-50)"],["#10b981","منخفضة (−30)"]] as const).map(([c,l])=>(
-                  <div key={l} style={{ display:"flex",alignItems:"center",gap:5,fontSize:11,color:"#374151",marginBottom:3 }}>
-                    <span style={{ width:11,height:11,borderRadius:3,background:c,flexShrink:0 }} />{l}
-                  </div>
-                ))}
-                <div style={{ fontSize:10,color:"#94a3b8",marginTop:6,lineHeight:1.4 }}>انقر على الحي للتعاقد</div>
-              </div>
-            </div>
-            </div>{/* /ngo-map-col */}
-          </div>
-        )}
-
-        {/* ════════════════════════════════════════
-            TAB 2 · ACTIVE PIPELINE — STEPPER
-        ════════════════════════════════════════ */}
-        {tab === "pipeline" && (
-          <div style={{ padding:"20px 24px" }}>
-            <div className="section-title">🔄 المسار النشط — تتبع المهام لحظياً</div>
-            {activeTasks.length === 0
-              ? <div className="empty-state"><div style={{fontSize:36,marginBottom:8}}>📋</div><div>لا توجد مهام نشطة حالياً</div><div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>ابدأ بالتعاقد من لوحة التحكم</div></div>
-              : activeTasks.map((task, ti) => {
-                const zone     = zones.find(z => z.id === task.zoneId);
-                const curStep  = task.status;
-                const stepIdx  = PIPELINE_STEPS.findIndex(s => s.key === curStep);
-                const safeIdx  = Math.max(0, stepIdx);
-                const driver   = MOCK_DRIVERS[ti % MOCK_DRIVERS.length];
-                const cost     = Number(task.quantityLiters) * 0.45;
-                return (
-                  <div key={task.id} className="pipeline-card">
-                    <div className="pipeline-card-header">
-                      <div>
-                        <div className="pipeline-zone">🗺️ {zone?.name ?? task.zoneId}</div>
-                        <div className="pipeline-meta">
-                          💧 {Number(task.quantityLiters).toLocaleString()} لتر
-                          · 📅 {new Date(task.scheduledAt).toLocaleDateString("ar-SY")}
-                          {safeIdx >= 1 && <span style={{color:"#2563eb"}}> · 🚛 {driver}</span>}
-                        </div>
-                      </div>
-                      <div style={{fontWeight:800,fontSize:16,color:"#059669"}}>${cost.toLocaleString()}</div>
-                    </div>
-
-                    {/* Stepper */}
-                    <div className="pipeline-stepper">
-                      {PIPELINE_STEPS.map((step, idx) => {
-                        const done = idx < safeIdx;
-                        const cur  = idx === safeIdx;
-                        return (
-                          <div key={step.key} className="stepper-step">
-                            <div className={`stepper-dot ${done?"dot-done":cur?"dot-current":"dot-future"}`}
-                              style={cur?{background:step.color,borderColor:step.color}:done?{background:"#10b981",borderColor:"#10b981"}:{}}>
-                              {done ? "✓" : cur ? step.icon : <span style={{fontSize:10}}>{idx+1}</span>}
-                            </div>
-                            <div className="stepper-label" style={cur?{color:step.color,fontWeight:700}:done?{color:"#10b981"}:{}}>
-                              {step.label}
-                            </div>
-                            {idx < PIPELINE_STEPS.length-1 && <div className={`stepper-line ${done?"line-done":""}`} />}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Status message */}
-                    <div className="pipeline-status-msg" style={{borderColor:PIPELINE_STEPS[safeIdx].color+"44",background:PIPELINE_STEPS[safeIdx].color+"0d"}}>
-                      <span style={{color:PIPELINE_STEPS[safeIdx].color}}>
-                        {safeIdx===0 && "⏳ بانتظار قبول شركة المياه للعقد..."}
-                        {safeIdx===1 && `📋 تم القبول — تم تعيين السائق: ${driver}`}
-                        {safeIdx===2 && `🚛 السائق ${driver} في الطريق إلى ${zone?.name}...`}
-                        {safeIdx===3 && `📍 الشاحنة وصلت — جارٍ توزيع المياه على الأهالي...`}
-                        {safeIdx===4 && "✅ اكتمل التوزيع — انتقل لتبويب التوثيق للإغلاق"}
-                      </span>
-                    </div>
-
-                  </div>
-                );
-              })
-            }
-          </div>
-        )}
-
-        {/* ════════════════════════════════════════
-            TAB 3 · VERIFICATION & SETTLEMENT
-        ════════════════════════════════════════ */}
-        {tab === "verify" && (
-          <div style={{padding:"20px 24px"}}>
-            <div className="section-title">✅ التوثيق والإغلاق المالي</div>
-            {deliveredTasks.length === 0
-              ? <div className="empty-state"><div style={{fontSize:36,marginBottom:8}}>📦</div><div>لا توجد مهام مكتملة بعد</div></div>
-              : deliveredTasks.map(task => {
-                const zone = zones.find(z => z.id === task.zoneId);
-                const cost = Number(task.quantityLiters) * 0.45;
-                return (
-                  <div key={task.id} className="verify-card">
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-                      <div>
-                        <div style={{fontWeight:700,fontSize:15,color:"#1e293b"}}>🗺️ {zone?.name ?? task.zoneId}</div>
-                        <div style={{fontSize:12,color:"#64748b",marginTop:3}}>
-                          💧 {Number(task.quantityLiters).toLocaleString()} لتر · 📅 {new Date(task.scheduledAt).toLocaleDateString("ar-SY")}
-                        </div>
-                      </div>
-                      <span style={{background:"#dcfce7",color:"#16a34a",padding:"4px 12px",borderRadius:20,fontSize:12,fontWeight:700}}>✅ مكتمل</span>
-                    </div>
-                    <div className="verify-proof-row">
-                      {[["📸","صورة التوثيق","مرفوعة من الميدان","#1e293b"],["🕐","الطابع الزمني",new Date(task.scheduledAt).toLocaleString("ar-SY"),"#1e293b"],["📍","مطابقة الموقع","✓ داخل حدود المنطقة","#10b981"]].map(([icon,lbl,val,col])=>(
-                        <div key={lbl as string} className="proof-item">
-                          <div className="proof-icon">{icon}</div>
-                          <div><div style={{fontWeight:600,fontSize:12}}>{lbl}</div><div style={{fontSize:11,color:col as string}}>{val}</div></div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12,paddingTop:12,borderTop:"1px solid #f1f5f9"}}>
-                      <div><span style={{fontSize:12,color:"#64748b"}}>التكلفة الإجمالية: </span><span style={{fontWeight:700,color:"#1e293b"}}>${cost.toLocaleString()}</span></div>
-                      <button className="btn btn-primary" style={{fontSize:13}} onClick={()=>{setProofTask(task);setProofOpen(true);}}>
-                        📋 اعتماد وإغلاق نهائي
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            }
-          </div>
-        )}
-
-        {/* ════════════════════════════════════════
-            TAB 4 · SCHEDULE BUILDER
-        ════════════════════════════════════════ */}
-        {tab === "schedule" && (() => {
-          const days = getNextDays(7);
-          const pendingTasks = tasks.filter(t => t.status === "pending" || t.status === "in_progress");
-          const otherTasks = scheduleTask ? tasks.filter(t => t.id !== scheduleTask.id) : tasks;
-          const conflict = scheduleTask && schedDay
-            ? slotConflict(otherTasks, scheduleTask.zoneId, schedDay, schedTime)
-            : false;
-
-          return (
-            <div style={{ display:"flex", height:"calc(100vh - 178px)", overflow:"hidden", maxWidth:"none" }}>
-
-              {/* ── Right panel: task list + form (RTL = appears right) ── */}
-              <div style={{ width:320, flexShrink:0, borderLeft:"1px solid #e2e8f0", overflowY:"auto", background:"#f8fafc", padding:16 }}>
-                {!scheduleTask ? (
-                  <>
-                    <div style={{ fontWeight:700,fontSize:14,color:"#1e293b",marginBottom:12 }}>📋 المهام بانتظار الجدولة</div>
-                    {pendingTasks.length === 0
-                      ? <div className="empty-state" style={{padding:"30px 0"}}><div style={{fontSize:28}}>✅</div><div style={{fontSize:13}}>كل المهام مجدولة</div></div>
-                      : pendingTasks.map(task => {
-                        const zone  = zones.find(z => z.id === task.zoneId);
-                        const score = zone ? priorityScore(zone) : 50;
-                        const color = priorityColor(score);
-                        const scheduledDt = new Date(task.scheduledAt);
-                        return (
-                          <div key={task.id} className="sched-task-card" style={{ borderRight:`4px solid ${color}` }}>
-                            <div style={{ flex:1 }}>
-                              <div style={{ fontWeight:700,fontSize:13,color:"#1e293b" }}>{zone?.name ?? task.zoneId}</div>
-                              <div style={{ fontSize:11,color:"#64748b",marginTop:2 }}>💧 {Number(task.quantityLiters).toLocaleString()} لتر</div>
-                              <div style={{ fontSize:11,color:"#94a3b8",marginTop:1 }}>
-                                📅 {scheduledDt.toLocaleDateString("ar-SY")} الساعة {scheduledDt.getHours()}:00
-                              </div>
-                            </div>
-                            <button className="btn btn-outline btn-sm" style={{ fontSize:11,whiteSpace:"nowrap" }}
-                              onClick={() => {
-                                const base = new Date(task.scheduledAt);
-                                const baseDay = dayKey(base);
-                                setScheduleTask(task);
-                                setSchedDay(baseDay >= dayKey(new Date()) ? baseDay : dayKey(getNextDays(1)[0]));
-                                setSchedTime(Math.round(base.getHours() / 2) * 2 || 8);
-                              }}>
-                              📅 جدول →
-                            </button>
-                          </div>
-                        );
-                      })
-                    }
-                  </>
-                ) : (
-                  <div>
-                    <div style={{ fontWeight:700,fontSize:14,color:"#1e293b",marginBottom:4 }}>📅 جدولة الموعد</div>
-                    <div style={{ fontSize:12,color:"#64748b",marginBottom:14 }}>{zones.find(z=>z.id===scheduleTask.zoneId)?.name}</div>
-
-                    <div style={{ fontWeight:600,fontSize:12,color:"#374151",marginBottom:8 }}>اختر اليوم</div>
-                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:14 }}>
-                      {days.map(d => (
-                        <button key={dayKey(d)} className={`sched-day-btn ${schedDay===dayKey(d)?"sched-day-btn-active":""}`}
-                          onClick={()=>setSchedDay(dayKey(d))}>
-                          <div style={{ fontWeight:700,fontSize:12 }}>{AR_DAYS[d.getDay()]}</div>
-                          <div style={{ fontSize:10,opacity:.7 }}>{d.getDate()}/{d.getMonth()+1}</div>
-                        </button>
-                      ))}
-                    </div>
-
-                    <div style={{ fontWeight:600,fontSize:12,color:"#374151",marginBottom:8 }}>الفترة الزمنية</div>
-                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:14 }}>
-                      {TIME_SLOTS.map(slot => (
-                        <button key={slot.h} className={`sched-time-btn ${schedTime===slot.h?"sched-time-btn-active":""}`}
-                          onClick={()=>setSchedTime(slot.h)}>
-                          {slot.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {schedDay && (
-                      <div className={`conflict-indicator ${conflict?"conflict-red":"conflict-green"}`}>
-                        <span style={{ fontSize:20 }}>{conflict?"⚠️":"✅"}</span>
-                        <div>
-                          {conflict
-                            ? <><div style={{ fontWeight:700,fontSize:12,color:"#dc2626" }}>تعارض في الموعد!</div><div style={{ fontSize:11,color:"#b91c1c" }}>توزيع آخر لنفس المنطقة في هذا الوقت</div></>
-                            : <><div style={{ fontWeight:700,fontSize:12,color:"#059669" }}>الموعد متاح ✓</div><div style={{ fontSize:11,color:"#047857" }}>التوزيع منسق جغرافياً</div></>
-                          }
-                        </div>
-                      </div>
-                    )}
-
-                    <div style={{ display:"flex",gap:8,marginTop:14 }}>
-                      <button className="btn btn-outline btn-sm" style={{ flex:1 }} onClick={()=>{setScheduleTask(null);setSchedDay("");}}>إلغاء</button>
-                      <button className="btn btn-primary" style={{ flex:2,fontSize:13 }} disabled={!schedDay||conflict} onClick={saveSchedule}>
-                        ✅ تأكيد الموعد
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* ── Left panel: weekly calendar grid ── */}
-              <div style={{ flex:1, overflowX:"auto", overflowY:"auto", padding:16 }}>
-                <div style={{ minWidth:560 }}>
-                  {/* Day headers */}
-                  <div className="cal-grid-header">
-                    <div className="cal-timecol-header">⏰</div>
-                    {days.map(d => (
-                      <div key={dayKey(d)} className={`cal-day-header ${dayKey(d)===schedDay?"cal-day-selected":""}`}>
-                        <div style={{ fontWeight:700,fontSize:12 }}>{AR_DAYS[d.getDay()]}</div>
-                        <div style={{ fontSize:11,color:dayKey(d)===schedDay?"#fff":"#94a3b8" }}>{d.getDate()}/{d.getMonth()+1}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Time rows */}
-                  {TIME_SLOTS.map(slot => (
-                    <div key={slot.h} className="cal-row">
-                      <div className="cal-time-label">{slot.label}</div>
-                      {days.map(d => {
-                        const cellTasks = tasksInSlot(tasks, d, slot.h);
-                        const isSelected = scheduleTask && dayKey(d)===schedDay && schedTime===slot.h;
-                        const hasConflictHere = isSelected && conflict;
-                        return (
-                          <div key={dayKey(d)}
-                            className={`cal-cell ${isSelected?(hasConflictHere?"cal-cell-conflict":"cal-cell-ok"):""} ${scheduleTask?"cal-cell-clickable":""}`}
-                            onClick={()=>{ if(scheduleTask){setSchedDay(dayKey(d));setSchedTime(slot.h);} }}>
-                            {cellTasks.map(t => {
-                              const z = zones.find(zn=>zn.id===t.zoneId);
-                              const color = z ? priorityColor(priorityScore(z)) : "#64748b";
-                              return (
-                                <div key={t.id} className="cal-task-block" style={{ background:color }}>
-                                  <div style={{ fontWeight:700,fontSize:9,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
-                                    {z?.name?.split(" / ")[0] ?? "مهمة"}
-                                  </div>
-                                  <div style={{ fontSize:8,opacity:.85 }}>{Number(t.quantityLiters)/1000}K ل</div>
-                                </div>
-                              );
-                            })}
-                            {isSelected && !hasConflictHere && (
-                              <div className="cal-preview-block">
-                                <div style={{ fontSize:9,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
-                                  {zones.find(z=>z.id===scheduleTask!.zoneId)?.name?.split(" / ")[0]}
-                                </div>
-                              </div>
-                            )}
-                            {isSelected && hasConflictHere && (
-                              <div className="cal-conflict-block">⚠️</div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
       </div>
 
       {/* ════════════════════════════════════════
-          MARKETPLACE DRAWER
+          TAB 1 · SCHEDULE DASHBOARD
+          Left: weekly calendar  |  Right: map
       ════════════════════════════════════════ */}
-      {selectedZone && drawerStep && (
-        <div className="drawer-overlay" onClick={closeDrawer}>
-          <div className="marketplace-drawer" dir="rtl" onClick={e=>e.stopPropagation()}>
-            <div className="drawer-header">
-              <div>
-                <div style={{fontSize:11,color:"#64748b",marginBottom:2}}>منطقة محددة</div>
-                <div style={{fontWeight:800,fontSize:18,color:"#1e293b"}}>🗺️ {selectedZone.name}</div>
-                <div style={{fontSize:12,color:"#64748b",marginTop:3}}>
-                  🆘 {selectedZone.signalCount} إشارة · 👥 {(selectedZone.populationEstimate??0).toLocaleString()} ساكن
-                </div>
-              </div>
-              <button className="drawer-close" onClick={closeDrawer}>✕</button>
-            </div>
+      {tab === "dashboard" && (
+        <div className="ngo-sched-split">
 
-            {/* Priority bar */}
-            <div style={{display:"flex",alignItems:"center",gap:12,margin:"14px 0",padding:"10px 14px",background:"#f8fafc",borderRadius:10}}>
-              <div style={{flex:1}}>
-                <div style={{fontSize:11,color:"#64748b",marginBottom:5}}>درجة الأولوية</div>
-                <div style={{height:8,background:"#e2e8f0",borderRadius:4,overflow:"hidden"}}>
-                  <div style={{height:"100%",width:`${priorityScore(selectedZone)}%`,background:priorityColor(priorityScore(selectedZone)),borderRadius:4,transition:"width .6s"}} />
+          {/* ── LEFT: Calendar panel ──────────────────────────── */}
+          <div className="ngo-cal-panel">
+            {!calZone ? (
+              <div className="ngo-cal-empty">
+                <div style={{ fontSize: 52, marginBottom: 14 }}>🗺️</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#1e293b", marginBottom: 8 }}>
+                  اختر حياً من الخريطة
                 </div>
-              </div>
-              <div style={{fontWeight:800,fontSize:22,color:priorityColor(priorityScore(selectedZone)),background:priorityColor(priorityScore(selectedZone))+"18",padding:"6px 14px",borderRadius:10}}>
-                {priorityScore(selectedZone)}
-              </div>
-            </div>
-
-            {/* ── MARKETPLACE ── */}
-            {drawerStep === "marketplace" && <>
-              <div className="drawer-section-title">🏪 مزودو الخدمة المعتمدون</div>
-              {providers.length === 0
-                ? <div style={{fontSize:13,color:"#94a3b8",textAlign:"center",padding:"20px 0"}}>لا يوجد مزودون معتمدون</div>
-                : providers.map((p, idx) => {
-                  const mock = providerMock(idx);
-                  const sel  = selectedProvider?.id === p.id;
-                  return (
-                    <div key={p.id} className={`market-card ${sel?"market-card-selected":""}`} onClick={()=>setSelectedProvider(sel?null:p)}>
-                      <div className="market-card-top">
-                        <div className="market-logo">🏢</div>
-                        <div style={{flex:1}}>
-                          <div className="market-name">{p.companyName}</div>
-                          <div style={{fontSize:12,color:"#64748b"}}>⚡ {mock.source}</div>
-                        </div>
-                        <div style={{textAlign:"left"}}>
-                          <span style={{fontWeight:800,fontSize:22,color:"#059669"}}>${mock.pricePerLiter.toFixed(2)}</span>
-                          <span style={{fontSize:11,color:"#64748b"}}>/لتر</span>
-                        </div>
-                      </div>
-                      <div className="market-card-stats">
-                        {[["💧",`${mock.dailyCapacityK}K لتر/يوم`],["✅","معتمد"],["⭐","4.8 تقييم"]].map(([ic,lb])=>(
-                          <div key={lb as string} style={{textAlign:"center",fontSize:11,color:"#475569"}}>
-                            <div style={{fontSize:16}}>{ic}</div>{lb}
-                          </div>
-                        ))}
-                      </div>
-                      {sel && <div style={{marginTop:10,background:"#dcfce7",color:"#16a34a",borderRadius:8,padding:"6px",textAlign:"center",fontWeight:700,fontSize:12}}>✓ تم الاختيار</div>}
-                    </div>
-                  );
-                })
-              }
-              <button className="btn btn-primary" style={{width:"100%",marginTop:16,padding:"13px",fontSize:15}}
-                disabled={!selectedProvider} onClick={()=>setDrawerStep("form")}>
-                تعاقد وإسناد ←
-              </button>
-            </>}
-
-            {/* ── FORM ── */}
-            {drawerStep === "form" && selectedProvider && (()=>{
-              const idx  = providers.indexOf(selectedProvider);
-              const mock = providerMock(idx);
-              const qty  = Number(contractQty)||0;
-              const cost = qty * mock.pricePerLiter;
-              const ok   = cost>0 && cost<=wallet.available && !!contractDate;
-              return <>
-                <div className="drawer-section-title">📋 تفاصيل العقد</div>
-                <div style={{display:"flex",justifyContent:"space-between",background:"#f0fdf4",border:"1.5px solid #86efac",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13}}>
-                  <span style={{fontWeight:600}}>🏢 {selectedProvider.companyName}</span>
-                  <span style={{color:"#059669",fontWeight:700}}>${mock.pricePerLiter.toFixed(2)}/لتر</span>
+                <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.6, maxWidth: 280, textAlign: "center" }}>
+                  انقر على أي حي أو منطقة على الخريطة لعرض جدول التوزيع الأسبوعي والحجوزات المتاحة
                 </div>
-                <form onSubmit={submitContract}>
-                  <div className="form-group">
-                    <label className="form-label">الكمية المطلوبة (لتر)</label>
-                    <input className="form-input" type="number" placeholder="مثال: 10000" min="1000" step="500"
-                      value={contractQty} onChange={e=>setContractQty(e.target.value)} required />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">التاريخ والوقت</label>
-                    <input className="form-input" type="datetime-local" value={contractDate} onChange={e=>setContractDate(e.target.value)} required />
-                  </div>
-                  {qty>0 && (
-                    <div className="cost-preview">
-                      <div className="cost-row"><span>{qty.toLocaleString()} لتر × ${mock.pricePerLiter.toFixed(2)}</span><span style={{fontWeight:700}}>${cost.toLocaleString()}</span></div>
-                      <div className="cost-row" style={{paddingTop:8,borderTop:"1px solid #e2e8f0",marginTop:8}}>
-                        <span style={{fontWeight:700}}>إجمالي التكلفة</span>
-                        <span style={{fontWeight:800,fontSize:20,color:cost<=wallet.available?"#059669":"#dc2626"}}>${cost.toLocaleString()}</span>
-                      </div>
-                      <div className="cost-row" style={{fontSize:11,color:"#64748b"}}>
-                        <span>الرصيد المتاح بعد العملية</span>
-                        <span style={{color:cost<=wallet.available?"#10b981":"#dc2626"}}>${(wallet.available-cost).toLocaleString()}</span>
-                      </div>
-                      {cost>wallet.available && <div style={{background:"#fef2f2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:8,padding:"8px 12px",marginTop:8,fontSize:12}}>❌ الرصيد غير كافٍ</div>}
-                    </div>
-                  )}
-                  <div style={{display:"flex",gap:8,marginTop:14}}>
-                    <button type="button" className="btn btn-outline" style={{flex:1}} onClick={()=>setDrawerStep("marketplace")}>← رجوع</button>
-                    <button type="submit" className="btn btn-primary" style={{flex:2}} disabled={!ok||submitting}>
-                      {submitting?"جارٍ الإرسال...":"✅ تأكيد العقد وتثبيت التمويل"}
+                <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {zones.slice(0, 4).map(z => (
+                    <button key={z.id} className="ngo-zone-quick-btn" onClick={() => selectZone(z)}>
+                      <span style={{ fontSize: 10, background: priorityColor(priorityScore(z)), color: "#fff", borderRadius: 6, padding: "2px 6px", fontWeight: 700 }}>
+                        {priorityScore(z)}
+                      </span>
+                      {z.name}
                     </button>
-                  </div>
-                </form>
-              </>;
-            })()}
-
-            {/* ── SUCCESS ── */}
-            {drawerStep === "success" && (
-              <div style={{textAlign:"center",padding:"20px 0"}}>
-                <div style={{fontSize:52}}>🎉</div>
-                <div style={{fontWeight:800,fontSize:18,color:"#059669",margin:"12px 0 6px"}}>تم إنشاء العقد بنجاح!</div>
-                <div style={{fontSize:13,color:"#374151",lineHeight:1.7,marginBottom:18}}>
-                  تم تحويل التمويل للضمان وبانتظار قبول المزود.<br/>
-                  تابع الحالة من تبويب <strong>المسار النشط</strong>.
-                </div>
-                <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 18px",marginBottom:18,textAlign:"right"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}>
-                    <span style={{color:"#64748b"}}>💰 المتاح الجديد</span>
-                    <span style={{fontWeight:700}}>${wallet.available.toLocaleString()}</span>
-                  </div>
-                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13}}>
-                    <span style={{color:"#64748b"}}>🔒 محجوز للضمان</span>
-                    <span style={{fontWeight:700,color:"#f59e0b"}}>${wallet.escrow.toLocaleString()}</span>
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:8}}>
-                  <button className="btn btn-outline" style={{flex:1}} onClick={closeDrawer}>إغلاق</button>
-                  <button className="btn btn-primary" style={{flex:2}} onClick={()=>{closeDrawer();setTab("pipeline");}}>🔄 المسار النشط →</button>
+                  ))}
                 </div>
               </div>
+            ) : (
+              <>
+                {/* Zone header bar */}
+                <div className="ngo-cal-zone-bar">
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: "#1e293b" }}>🗺️ {calZone.name}</span>
+                      <span className={`badge ${calZone.status === "active" ? "badge-green" : "badge-gray"}`}>
+                        {calZone.status === "active" ? "نشطة" : "غير نشطة"}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
+                      🆘 {calZone.signalCount} إشارة · 👥 {(calZone.populationEstimate ?? 0).toLocaleString()} ساكن
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    <div className="ngo-lock-legend">
+                      <span className="ngo-lock-pill ngo-pill-available">متاح</span>
+                      <span className="ngo-lock-pill ngo-pill-mine">محجوزتي</span>
+                      <span className="ngo-lock-pill ngo-pill-locked">🔒 محجوز</span>
+                    </div>
+                    <button className="btn btn-sm btn-outline" onClick={() => setCalZone(null)}>تغيير</button>
+                  </div>
+                </div>
+
+                {/* Weekly grid */}
+                <div className="ngo-cal-grid-wrap">
+                  <div className="ngo-cal-grid">
+                    {/* Header row: time label + 7 days */}
+                    <div className="ngo-cal-head-row">
+                      <div className="ngo-cal-time-col" />
+                      {days.map(d => {
+                        const isToday = dayKey(d) === dayKey(new Date());
+                        return (
+                          <div key={dayKey(d)} className={`ngo-cal-day-head ${isToday ? "ngo-cal-day-today" : ""}`}>
+                            <div style={{ fontWeight: 700, fontSize: 12 }}>{AR_DAYS[d.getDay()]}</div>
+                            <div style={{ fontSize: 11, opacity: 0.75 }}>{d.getDate()}/{d.getMonth() + 1}</div>
+                            {isToday && <div style={{ fontSize: 9, color: "#2563eb", fontWeight: 700, marginTop: 2 }}>اليوم</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Slot rows */}
+                    {TIME_SLOTS.map(slot => (
+                      <div key={slot.h} className="ngo-cal-slot-row">
+                        <div className="ngo-cal-time-label">{slot.label}</div>
+                        {days.map(d => {
+                          const dk = dayKey(d);
+                          const state = getSlotState(tasks, calZone.id, dk, slot.h);
+                          const task = getSlotTask(tasks, calZone.id, dk, slot.h);
+                          const isPast = d < new Date(new Date().setHours(slot.h + 2, 0, 0, 0));
+
+                          if (state === "locked") {
+                            return (
+                              <div key={dk} className="ngo-cal-cell ngo-cell-locked"
+                                title="هذا النطاق محجوز حالياً بواسطة منظمة زميلة - منعاً لتضارب التوزيع وضمان عدالة الحصص">
+                                <div className="ngo-lock-icon">🔒</div>
+                                <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>محجوز</div>
+                              </div>
+                            );
+                          }
+
+                          if (state === "mine" && task) {
+                            const col = priorityColor(priorityScore(calZone));
+                            return (
+                              <div key={dk} className="ngo-cal-cell ngo-cell-mine" style={{ background: col + "18", borderColor: col + "55" }}>
+                                <div style={{ color: col, fontWeight: 800, fontSize: 10, marginBottom: 2 }}>✓ مجدول</div>
+                                <div style={{ fontSize: 9, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {Number(task.quantityLiters) / 1000}K لتر
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Available
+                          if (isPast) {
+                            return (
+                              <div key={dk} className="ngo-cal-cell ngo-cell-past">
+                                <div style={{ fontSize: 9, color: "#cbd5e1" }}>—</div>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div key={dk} className="ngo-cal-cell ngo-cell-available"
+                              onClick={() => openSlot(d, slot.h)}>
+                              <div className="ngo-avail-text">+ جدول</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
+          </div>
+
+          {/* ── RIGHT: Map panel ─────────────────────────────── */}
+          <div className="ngo-map-panel-new">
+            <div ref={mapDivRef} className="ngo-map-full" />
+            <div className="ngo-map-legend">
+              <div style={{ fontWeight: 700, fontSize: 11, color: "#1e293b", marginBottom: 6 }}>خريطة الأولوية</div>
+              {([ ["#dc2626","عالية جداً"], ["#ea580c","عالية"], ["#f59e0b","متوسطة"], ["#10b981","منخفضة"] ] as const).map(([c, l]) => (
+                <div key={l} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#374151", marginBottom: 3 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: c, flexShrink: 0 }} />{l}
+                </div>
+              ))}
+              <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 6, lineHeight: 1.4 }}>انقر على الحي لعرض التقويم</div>
+            </div>
           </div>
         </div>
       )}
 
       {/* ════════════════════════════════════════
-          PROOF OF DELIVERY MODAL
+          TAB 2 · ACTIVE PIPELINE
       ════════════════════════════════════════ */}
-      {proofTask && proofOpen && (
-        <div className="modal-overlay" onClick={()=>{setProofOpen(false);setProofTask(null);}}>
-          <div className="proof-modal" dir="rtl" style={{width:430,maxWidth:"90vw"}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontSize:32,marginBottom:4}}>📋</div>
-            <div style={{fontWeight:800,fontSize:18,color:"#1e293b",marginBottom:2}}>مستند التوثيق الميداني</div>
-            <div style={{fontSize:12,color:"#64748b",marginBottom:18}}>{zones.find(z=>z.id===proofTask.zoneId)?.name}</div>
-
-            {/* Mock field photo */}
-            <div style={{background:"#0f172a",borderRadius:14,padding:"32px 24px",marginBottom:14,textAlign:"center",position:"relative"}}>
-              <div style={{fontSize:48}}>🚛💧</div>
-              <div style={{color:"#60a5fa",fontSize:13,fontWeight:600,marginTop:8}}>صورة ميدانية مرفوعة</div>
-              <div style={{color:"#475569",fontSize:11,marginTop:3}}>IMG_{proofTask.id.slice(-6).toUpperCase()}.jpg</div>
-              {[["top:10px","right:10px","borderTop","borderRight"],["top:10px","left:10px","borderTop","borderLeft"],["bottom:10px","right:10px","borderBottom","borderRight"],["bottom:10px","left:10px","borderBottom","borderLeft"]].map(([t,s])=>(
-                <div key={t+s} style={{position:"absolute",...Object.fromEntries([[t.split(":")[0],t.split(":")[1]],[s.split(":")[0],s.split(":")[1]]]),width:18,height:18,borderColor:"#60a5fa",borderStyle:"solid",borderWidth:0,[s.split(":")[0]==="right"?"borderRight":"borderLeft"]:"2px solid #60a5fa",[t.split(":")[0]==="top"?"borderTop":"borderBottom"]:"2px solid #60a5fa"}} />
-              ))}
-            </div>
-
-            <div className="proof-details-grid">
-              {[["🕐","الطابع الزمني",new Date(proofTask.scheduledAt).toLocaleString("ar-SY"),"#1e293b"],["📍","مطابقة الموقع","✓ داخل حدود المنطقة","#10b981"],["💧","الكمية الموزعة",`${Number(proofTask.quantityLiters).toLocaleString()} لتر`,"#1e293b"],["💰","إجمالي التكلفة",`$${(Number(proofTask.quantityLiters)*0.45).toLocaleString()}`,"#059669"]].map(([icon,lbl,val,col])=>(
-                <div key={lbl as string} className="proof-detail-item">
-                  <span style={{fontSize:20}}>{icon}</span>
-                  <div><div style={{fontWeight:600,fontSize:12}}>{lbl}</div><div style={{fontSize:11,color:col as string}}>{val}</div></div>
+      {tab === "pipeline" && (
+        <div style={{ padding: "20px 24px" }}>
+          <div className="section-title">🔄 المسار النشط — تتبع المهام لحظياً</div>
+          {activeTasks.length === 0
+            ? <div className="empty-state"><div style={{ fontSize: 36, marginBottom: 8 }}>📋</div><div>لا توجد مهام نشطة حالياً</div><div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>ابدأ بالجدولة من تبويب "جدولة التوزيع"</div></div>
+            : activeTasks.map((task, ti) => {
+              const zone = zones.find(z => z.id === task.zoneId);
+              const stepIdx = Math.max(0, PIPELINE_STEPS.findIndex(s => s.key === task.status));
+              const driver = MOCK_DRIVERS[ti % MOCK_DRIVERS.length];
+              const cost = Number(task.quantityLiters) * 0.045;
+              return (
+                <div key={task.id} className="pipeline-card">
+                  <div className="pipeline-card-header">
+                    <div>
+                      <div className="pipeline-zone">🗺️ {zone?.name ?? task.zoneId}</div>
+                      <div className="pipeline-meta">
+                        💧 {Number(task.quantityLiters).toLocaleString()} لتر
+                        · 📅 {new Date(task.scheduledAt).toLocaleDateString("ar-SY")}
+                        {stepIdx >= 1 && <span style={{ color: "#2563eb" }}> · 🚛 {driver}</span>}
+                      </div>
+                    </div>
+                    <div style={{ fontWeight: 800, fontSize: 16, color: "#059669" }}>${cost.toLocaleString()}</div>
+                  </div>
+                  <div className="pipeline-stepper">
+                    {PIPELINE_STEPS.map((step, idx) => {
+                      const done = idx < stepIdx; const cur = idx === stepIdx;
+                      return (
+                        <div key={step.key} className="stepper-step">
+                          <div className={`stepper-dot ${done ? "dot-done" : cur ? "dot-current" : "dot-future"}`}
+                            style={cur ? { background: step.color, borderColor: step.color } : done ? { background: "#10b981", borderColor: "#10b981" } : {}}>
+                            {done ? "✓" : cur ? step.icon : <span style={{ fontSize: 10 }}>{idx + 1}</span>}
+                          </div>
+                          <div className="stepper-label" style={cur ? { color: step.color, fontWeight: 700 } : done ? { color: "#10b981" } : {}}>
+                            {step.label}
+                          </div>
+                          {idx < PIPELINE_STEPS.length - 1 && <div className={`stepper-line ${done ? "line-done" : ""}`} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="pipeline-status-msg" style={{ borderColor: PIPELINE_STEPS[stepIdx].color + "44", background: PIPELINE_STEPS[stepIdx].color + "0d" }}>
+                    <span style={{ color: PIPELINE_STEPS[stepIdx].color }}>
+                      {stepIdx === 0 && "⏳ بانتظار قبول شركة المياه للعقد..."}
+                      {stepIdx === 1 && `📋 تم القبول — تم تعيين السائق: ${driver}`}
+                      {stepIdx === 2 && `🚛 السائق ${driver} في الطريق إلى ${zone?.name}...`}
+                      {stepIdx === 3 && "📍 الشاحنة وصلت — جارٍ توزيع المياه على الأهالي..."}
+                      {stepIdx === 4 && "✅ اكتمل التوزيع — انتقل لتبويب التوثيق للإغلاق"}
+                    </span>
+                  </div>
                 </div>
-              ))}
-            </div>
-
-            <div style={{display:"flex",gap:8,marginTop:18}}>
-              <button className="btn btn-outline" style={{flex:1}} onClick={()=>{setProofOpen(false);setProofTask(null);}}>إلغاء</button>
-              <button className="btn btn-primary" style={{flex:2,background:"#059669",borderColor:"#059669"}} onClick={()=>approveDelivery(proofTask)}>
-                ✅ اعتماد وإغلاق نهائي
-              </button>
-            </div>
-          </div>
+              );
+            })
+          }
         </div>
+      )}
+
+      {/* ════════════════════════════════════════
+          TAB 3 · VERIFICATION
+      ════════════════════════════════════════ */}
+      {tab === "verify" && (
+        <div style={{ padding: "20px 24px" }}>
+          <div className="section-title">✅ التوثيق والإغلاق المالي</div>
+          {deliveredTasks.length === 0
+            ? <div className="empty-state"><div style={{ fontSize: 36, marginBottom: 8 }}>📦</div><div>لا توجد مهام مكتملة بعد</div></div>
+            : deliveredTasks.map(task => {
+              const zone = zones.find(z => z.id === task.zoneId);
+              const cost = Number(task.quantityLiters) * 0.045;
+              return (
+                <div key={task.id} className="verify-card">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: "#1e293b" }}>🗺️ {zone?.name ?? task.zoneId}</div>
+                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
+                        💧 {Number(task.quantityLiters).toLocaleString()} لتر · 📅 {new Date(task.scheduledAt).toLocaleDateString("ar-SY")}
+                      </div>
+                    </div>
+                    <span style={{ background: "#dcfce7", color: "#16a34a", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>✅ مكتمل</span>
+                  </div>
+                  <div className="verify-proof-row">
+                    {([["📸", "صورة التوثيق", "مرفوعة من الميدان", "#1e293b"], ["🕐", "الطابع الزمني", new Date(task.scheduledAt).toLocaleString("ar-SY"), "#1e293b"], ["📍", "مطابقة الموقع", "✓ داخل حدود المنطقة", "#10b981"]] as const).map(([icon, lbl, val, col]) => (
+                      <div key={lbl} className="proof-item">
+                        <div className="proof-icon">{icon}</div>
+                        <div><div style={{ fontWeight: 600, fontSize: 12 }}>{lbl}</div><div style={{ fontSize: 11, color: col }}>{val}</div></div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, paddingTop: 12, borderTop: "1px solid #f1f5f9" }}>
+                    <div><span style={{ fontSize: 12, color: "#64748b" }}>التكلفة الإجمالية: </span><span style={{ fontWeight: 700, color: "#1e293b" }}>${cost.toFixed(0)}</span></div>
+                    <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={() => approveDelivery(task)}>
+                      📋 اعتماد وإغلاق نهائي
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════
+          SCHEDULING DRAWER
+      ════════════════════════════════════════ */}
+      {drawerSlot && calZone && (
+        <>
+          <div className="ngo-drawer-overlay" onClick={closeDrawer} />
+          <div className="ngo-sched-drawer" dir="rtl">
+
+            {submitted ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: 40, textAlign: "center" }}>
+                <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: "#059669", marginBottom: 8 }}>تم تأكيد الجدول!</div>
+                <div style={{ fontSize: 14, color: "#64748b" }}>المبلغ محجوز في حساب الضمان ريثما يُثبَت التسليم</div>
+              </div>
+            ) : (
+              <>
+                {/* Drawer header */}
+                <div className="ngo-drawer-head">
+                  <div>
+                    <div style={{ fontSize: 11, color: "#64748b", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.5px" }}>جدولة توزيع</div>
+                    <div style={{ fontSize: 17, fontWeight: 800, color: "#1e293b" }}>🗺️ {calZone.name}</div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
+                      📅 {AR_DAYS[drawerSlot.day.getDay()]} {drawerSlot.day.getDate()}/{drawerSlot.day.getMonth() + 1}
+                      · ⏰ {TIME_SLOTS.find(s => s.h === drawerSlot.slotH)?.label}
+                    </div>
+                  </div>
+                  <button className="drawer-close" onClick={closeDrawer}>✕</button>
+                </div>
+
+                {/* Liters input */}
+                <div className="ngo-drawer-section">
+                  <label className="ngo-drawer-label">الكمية المطلوبة (باللتر)</label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="number"
+                      className="ngo-qty-input"
+                      placeholder="مثال: 10000"
+                      value={drawerQty}
+                      onChange={e => { setDrawerQty(e.target.value); setDrawerProvider(null); }}
+                      min="100"
+                    />
+                    <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "#94a3b8", fontWeight: 600 }}>لتر</span>
+                  </div>
+                  {qty > 0 && (
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 6, display: "flex", gap: 12 }}>
+                      <span>💧 {qty.toLocaleString()} لتر</span>
+                      <span style={{ color: "#94a3b8" }}>≈ {(qty / 1000).toFixed(1)} طن</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Provider marketplace cards — appear when qty entered */}
+                {qty > 0 && (
+                  <div className="ngo-drawer-section">
+                    <div className="ngo-drawer-label">اختر المزود</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {provExt.sort((a, b) => b.ext.trustScore - a.ext.trustScore).map(p => {
+                        const total = qty * p.ext.pricePerLiter;
+                        const isCheapest = p.ext.pricePerLiter === minPrice;
+                        const isTopRated = p.ext.trustScore === maxScore;
+                        const isSelected = drawerProvider?.id === p.id;
+                        return (
+                          <div key={p.id}
+                            className={`ngo-prov-card ${isSelected ? "ngo-prov-card-selected" : ""}`}
+                            onClick={() => setDrawerProvider(isSelected ? null : p)}>
+
+                            {/* Badges */}
+                            {(isCheapest || isTopRated) && (
+                              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                                {isTopRated && <span className="ngo-prov-badge ngo-badge-top">⚡ الأعلى تقييماً</span>}
+                                {isCheapest && <span className="ngo-prov-badge ngo-badge-cheap">💰 الأوفر سعراً</span>}
+                              </div>
+                            )}
+
+                            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                              <div style={{ width: 44, height: 44, background: isSelected ? "#dbeafe" : "#f1f5f9", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🏭</div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>{p.companyName}</div>
+                                <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{p.ext.source}</div>
+                              </div>
+                              <div style={{ textAlign: "center" }}>
+                                <div style={{ fontSize: 18, fontWeight: 800, color: isSelected ? "#1d4ed8" : "#059669" }}>
+                                  ${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </div>
+                                <div style={{ fontSize: 10, color: "#94a3b8" }}>إجمالي العقد</div>
+                              </div>
+                            </div>
+
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${isSelected ? "#bfdbfe" : "#f1f5f9"}` }}>
+                              <div style={{ textAlign: "center" }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "#f59e0b" }}>
+                                  {"⭐".repeat(Math.floor(p.ext.trustScore))} {p.ext.trustScore}
+                                </div>
+                                <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>{p.ext.completedJobs} مهمة ناجحة</div>
+                              </div>
+                              <div style={{ textAlign: "center" }}>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{p.ext.freeFleet}</div>
+                                <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>شاحنات متفرغة</div>
+                              </div>
+                              <div style={{ textAlign: "center" }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>${p.ext.pricePerLiter}</div>
+                                <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>/ لتر</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Escrow notice */}
+                {drawerProvider && qty > 0 && (
+                  <div className="ngo-escrow-notice">
+                    <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b", marginBottom: 4 }}>📋 ملخص العقد</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#374151", padding: "4px 0" }}>
+                      <span>الكمية</span><span style={{ fontWeight: 600 }}>{Number(drawerQty).toLocaleString()} لتر</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#374151", padding: "4px 0" }}>
+                      <span>المزود</span><span style={{ fontWeight: 600 }}>{drawerProvider.companyName}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#374151", padding: "4px 0", borderTop: "1px solid #e2e8f0", marginTop: 4, paddingTop: 8 }}>
+                      <span style={{ fontWeight: 700 }}>إجمالي العقد</span>
+                      <span style={{ fontWeight: 800, fontSize: 16, color: "#059669" }}>
+                        ${(qty * (PROVIDER_EXT[drawerProvider.id]?.pricePerLiter ?? 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                    <div style={{ marginTop: 10, padding: "8px 12px", background: "#fef3c7", borderRadius: 8, fontSize: 12, color: "#92400e" }}>
+                      🔒 سيُحوَّل المبلغ إلى حساب الضمان فور التأكيد ولن يُصرف للمزود إلا بعد إثبات التسليم
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div style={{ marginTop: "auto", padding: "16px 0 0" }}>
+                  <button
+                    className="btn btn-primary"
+                    style={{ width: "100%", fontSize: 15, padding: "13px", justifyContent: "center" }}
+                    disabled={!drawerProvider || !drawerQty || qty <= 0 || submitting}
+                    onClick={confirmSchedule}>
+                    {submitting ? "⏳ جارٍ الحجز..." : "✅ تأكيد وتثبيت الجدول"}
+                  </button>
+                  <button className="btn btn-outline" style={{ width: "100%", marginTop: 8, fontSize: 13 }} onClick={closeDrawer}>إلغاء</button>
+                </div>
+              </>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
