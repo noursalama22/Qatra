@@ -224,14 +224,54 @@ export default function NgoPortal() {
         </button>
       </div>
 
-      <div className="portal-body" style={{ padding: tab === "dashboard" ? 0 : undefined }}>
+      <div className="portal-body" style={{ padding: tab === "dashboard" ? 0 : undefined, maxWidth: tab === "dashboard" ? "none" : undefined }}>
 
         {/* ════════════════════════════════════════
             TAB 1 · DASHBOARD — MAP + PRIORITY TABLE
         ════════════════════════════════════════ */}
         {tab === "dashboard" && (
           <div className="ngo-dashboard">
-            {/* Map */}
+            {/* Priority table — RIGHT column (RTL: appears on right) */}
+            <div className="ngo-zone-table">
+              <div className="ngo-zone-table-header">
+                <span style={{ fontWeight:700,fontSize:13 }}>📊 الأولوية تنازلياً</span>
+                <span style={{ fontSize:11,color:"#64748b" }}>{zones.length} منطقة</span>
+              </div>
+              {sortedZones.map((z, i) => {
+                const score = priorityScore(z);
+                const color = priorityColor(score);
+                const zt    = tasks.filter(t => t.zoneId === z.id);
+                const isSel = selectedZone?.id === z.id;
+                return (
+                  <div key={z.id}
+                    className={`ngo-zone-row ${isSel ? "ngo-zone-row-selected" : ""}`}
+                    onClick={() => openZone(z)}
+                    style={{ borderRight: `4px solid ${color}` }}>
+                    <div className="ngo-zone-rank" style={{ color }}>{i + 1}</div>
+                    <div className="ngo-zone-info">
+                      <div className="ngo-zone-name">{z.name}</div>
+                      <div className="ngo-zone-meta">
+                        🆘 {z.signalCount} إشارة · 👥 {(z.populationEstimate??0).toLocaleString()}
+                        {z.lastDeliveryAt && <><br/>📅 {new Date(z.lastDeliveryAt).toLocaleDateString("ar-SY")}</>}
+                      </div>
+                    </div>
+                    <div style={{ display:"flex",flexDirection:"column",alignItems:"center",background:color+"18",color,padding:"5px 8px",borderRadius:8,minWidth:42,flexShrink:0 }}>
+                      <span style={{ fontWeight:800,fontSize:16 }}>{score}</span>
+                      <span style={{ fontSize:8 }}>أولوية</span>
+                    </div>
+                    {(zt.filter(t=>t.status==="pending").length>0 || zt.filter(t=>t.status==="in_progress").length>0) && (
+                      <div style={{ display:"flex",flexDirection:"column",gap:3,flexShrink:0 }}>
+                        {zt.filter(t=>t.status==="pending").length>0    && <span className="zone-task-chip chip-pending"  style={{fontSize:9}}>{zt.filter(t=>t.status==="pending").length}م</span>}
+                        {zt.filter(t=>t.status==="in_progress").length>0 && <span className="zone-task-chip chip-active" style={{fontSize:9}}>{zt.filter(t=>t.status==="in_progress").length}ج</span>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Map — LEFT column */}
+            <div className="ngo-map-col">
             <div className="ngo-map-wrap">
               <div ref={mapDivRef} className="ngo-map" />
               <div className="ngo-map-legend">
@@ -241,43 +281,10 @@ export default function NgoPortal() {
                     <span style={{ width:11,height:11,borderRadius:3,background:c,flexShrink:0 }} />{l}
                   </div>
                 ))}
-                <div style={{ fontSize:10,color:"#94a3b8",marginTop:6,lineHeight:1.4 }}>انقر على المنطقة أو الصف للتعاقد</div>
+                <div style={{ fontSize:10,color:"#94a3b8",marginTop:6,lineHeight:1.4 }}>انقر على الحي للتعاقد</div>
               </div>
             </div>
-
-            {/* Priority table */}
-            <div className="ngo-zone-table">
-              <div className="ngo-zone-table-header">
-                <span style={{ fontWeight:700,fontSize:14 }}>المناطق مرتبة حسب الأولوية</span>
-                <span style={{ fontSize:12,color:"#64748b" }}>{zones.length} منطقة</span>
-              </div>
-              {sortedZones.map((z, i) => {
-                const score = priorityScore(z);
-                const color = priorityColor(score);
-                const zt = tasks.filter(t => t.zoneId === z.id);
-                return (
-                  <div key={z.id} className="ngo-zone-row" onClick={() => openZone(z)} style={{ borderRight: `4px solid ${color}` }}>
-                    <div className="ngo-zone-rank" style={{ color }}>{i + 1}</div>
-                    <div className="ngo-zone-info">
-                      <div className="ngo-zone-name">{z.name}</div>
-                      <div className="ngo-zone-meta">
-                        🆘 {z.signalCount} إشارة · 👥 {(z.populationEstimate??0).toLocaleString()} ساكن
-                        {z.lastDeliveryAt && ` · 📅 ${new Date(z.lastDeliveryAt).toLocaleDateString("ar-SY")}`}
-                      </div>
-                    </div>
-                    <div style={{ display:"flex",flexDirection:"column",alignItems:"center",background:color+"18",color,padding:"6px 10px",borderRadius:10,minWidth:48 }}>
-                      <span style={{ fontWeight:800,fontSize:18 }}>{score}</span>
-                      <span style={{ fontSize:9 }}>أولوية</span>
-                    </div>
-                    <div style={{ display:"flex",gap:5,flexShrink:0 }}>
-                      {zt.filter(t=>t.status==="pending").length>0 && <span className="zone-task-chip chip-pending">{zt.filter(t=>t.status==="pending").length} مجدولة</span>}
-                      {zt.filter(t=>t.status==="in_progress").length>0 && <span className="zone-task-chip chip-active">{zt.filter(t=>t.status==="in_progress").length} جارية</span>}
-                    </div>
-                    <button className="ngo-zone-cta" onClick={e=>{e.stopPropagation();openZone(z);}}>تعاقد →</button>
-                  </div>
-                );
-              })}
-            </div>
+            </div>{/* /ngo-map-col */}
           </div>
         )}
 
