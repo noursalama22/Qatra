@@ -258,14 +258,54 @@ function ActionButton({ status, approved, onAction }: ActionButtonProps) {
   return null;
 }
 
-function CounterCard({ label, value, color }: { label: string; value: number; color: string }) {
+type CounterCardVariant = "neutral" | "warning" | "teal" | "green";
+
+const COUNTER_CARD_STYLES: Record<CounterCardVariant, {
+  background: string;
+  borderLeft: string;
+  labelColor: string;
+  valueColor: string;
+}> = {
+  neutral: {
+    background: "#fff",
+    borderLeft: "1px solid #d8eef8",
+    labelColor: "#6b8aa0",
+    valueColor: "#12384f",
+  },
+  warning: {
+    background: "#FAEEDA",
+    borderLeft: "3px solid #EF9F27",
+    labelColor: "#633806",
+    valueColor: "#633806",
+  },
+  teal: {
+    background: "#E1F5EE",
+    borderLeft: "3px solid #1D9E75",
+    labelColor: "#085041",
+    valueColor: "#085041",
+  },
+  green: {
+    background: "#EAF3DE",
+    borderLeft: "3px solid #639922",
+    labelColor: "#27500A",
+    valueColor: "#27500A",
+  },
+};
+
+function CounterCard({ label, value, variant = "neutral" }: { label: string; value: number; variant?: CounterCardVariant }) {
+  const s = COUNTER_CARD_STYLES[variant];
   return (
     <div style={{
-      background: "#fff", border: "1px solid #d8eef8", borderRadius: 12,
-      padding: "18px 22px", flex: 1, minWidth: 0,
+      background: s.background,
+      border: "1px solid transparent",
+      borderLeft: s.borderLeft,
+      borderRadius: 12,
+      padding: "18px 22px",
+      flex: 1,
+      minWidth: 0,
     }}>
-      <div style={{ fontSize: 11, color: "#6b8aa0", fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.4px" }}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 800, color }}>{value}</div>
+      <div style={{ fontSize: 11, color: s.labelColor, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.4px" }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 500, color: s.valueColor }}>{value}</div>
     </div>
   );
 }
@@ -645,10 +685,10 @@ export default function ProviderTasks() {
       {tab === "ngo" && (
         <>
           <div style={{ display: "flex", gap: 14, marginBottom: 24 }}>
-            <CounterCard label="إجمالي المهام" value={ngoCounters.total} color="#12384f" />
-            <CounterCard label="معلقة" value={ngoCounters.pending} color="#d97706" />
-            <CounterCard label="جارية" value={ngoCounters.inProgress} color="#0f766e" />
-            <CounterCard label="مكتملة" value={ngoCounters.completed} color="#16a34a" />
+            <CounterCard label="إجمالي المهام" value={ngoCounters.total} variant="neutral" />
+            <CounterCard label="معلقة" value={ngoCounters.pending} variant="warning" />
+            <CounterCard label="جارية" value={ngoCounters.inProgress} variant="teal" />
+            <CounterCard label="مكتملة" value={ngoCounters.completed} variant="green" />
           </div>
 
           <FilterBar
@@ -727,10 +767,10 @@ export default function ProviderTasks() {
       {tab === "citizen" && (
         <>
           <div style={{ display: "flex", gap: 14, marginBottom: 24 }}>
-            <CounterCard label="إجمالي المهام" value={citCounters.total} color="#12384f" />
-            <CounterCard label="معلقة" value={citCounters.pending} color="#d97706" />
-            <CounterCard label="جارية" value={citCounters.inProgress} color="#0f766e" />
-            <CounterCard label="مكتملة" value={citCounters.completed} color="#16a34a" />
+            <CounterCard label="إجمالي المهام" value={citCounters.total} variant="neutral" />
+            <CounterCard label="معلقة" value={citCounters.pending} variant="warning" />
+            <CounterCard label="جارية" value={citCounters.inProgress} variant="teal" />
+            <CounterCard label="مكتملة" value={citCounters.completed} variant="green" />
           </div>
 
           <FilterBar
