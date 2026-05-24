@@ -10,10 +10,10 @@
 .sidebar-logo span { font-size: 11px; color: #6b8aa0; text-transform: uppercase; letter-spacing: 0.5px; } .sidebar-nav { padding: 12px 8px; flex: 1; }
 .nav-section-label { font-size: 10px; font-weight: 600; color: #6b8aa0; text-transform: uppercase; letter-spacing: 0.8px; padding: 8px 12px 4px;
 }
-.nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: #5f8299; transition: all 0.15s; margin-bottom: 2px; background: none; border: none; width: 100%; text-align: right;
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: #5f8299; transition: all 0.15s; margin-bottom: 2px; background: none; border: none; width: 100%; text-align: right; text-decoration: none;
 }
-.nav-item:hover { background: #e0f7ff; color: #0f5f8d; }
-.nav-item.active { background: #0ea5e9; color: #fff; }
+.nav-item:hover { background: #e0f7ff; color: #0f5f8d; text-decoration: none; }
+.nav-item.active { background: #0ea5e9; color: #fff; text-decoration: none; }
 .nav-group { margin-bottom: 6px; }
 .nav-group-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 8px 12px; border: none; border-radius: 8px; background: transparent; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 700; color: #8eb5c8; text-transform: uppercase; letter-spacing: 0.5px; text-align: right; transition: background 0.15s, color 0.15s; }
 .nav-group-toggle:hover { background: #eef8fd; color: #0f5f8d; }

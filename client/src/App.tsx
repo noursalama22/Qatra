@@ -1,28 +1,17 @@
-import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { Dispatch, FormEvent, SetStateAction, useEffect, useState } from "react";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import AdminPortal from "./pages/AdminPortal";
 import NgoPortal from "./pages/NgoPortal";
 import ProviderPortal from "./pages/ProviderPortal";
 import DriverPortal from "./pages/DriverPortal";
 import Citizen from "./pages/Citizen";
 import MapView from "./pages/MapView";
+import AppLayout from "./layouts/AppLayout";
+import RequireRole, { AuthUser } from "./components/RequireRole";
 import { api, Provider, Zone } from "./api";
-import {
-  AppPageId, DEFAULT_NGO_PAGE, NGO_NAV_GROUPS, NGO_STANDALONE_NAV,
-  ngoSectionFromPage, pageLabel,
-} from "./ngoNav";
+import { DEFAULT_NGO_PATH, ROLE_HOME, Role } from "./routes";
 
-type Role = "admin" | "ngo" | "provider" | "driver" | "citizen";
 type AuthMode = "login" | "register";
-
-type AuthUser = {
-  id: string;
-  email: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  role: Role;
-  roleStatus: "pending" | "approved" | "rejected";
-  profile: Record<string, any> | null;
-};
 
 type AuthForm = {
   role: Role;
@@ -46,11 +35,6 @@ type AuthForm = {
   lng: string;
 };
 
-type ProfileDraft = AuthForm & {
-  currentPassword: string;
-  newPassword: string;
-};
-
 const ROLES: { id: Role; label: string; color: string }[] = [
   { id: "admin", label: "المشرف", color: "#0f5f8d" },
   { id: "ngo", label: "المنظمة", color: "#0891b2" },
@@ -60,33 +44,6 @@ const ROLES: { id: Role; label: string; color: string }[] = [
 ];
 
 const REGISTER_ROLES = ROLES.filter(role => role.id === "ngo" || role.id === "provider");
-
-const ROLE_NAV: Record<Role, { id: AppPageId; label: string }[]> = {
-  admin: [
-    { id: "main", label: "لوحة الإشراف" },
-    { id: "map", label: "الخريطة الحية" },
-  ],
-  ngo: [],
-  provider: [
-    { id: "main", label: "بوابة المزود" },
-    { id: "map", label: "الخريطة الحية" },
-  ],
-  driver: [
-    { id: "main", label: "مهامي" },
-    { id: "map", label: "خريطة الطريق" },
-  ],
-  citizen: [
-    { id: "main", label: "بوابة المواطن" },
-  ],
-};
-
-const ROLE_DESCRIPTIONS: Record<Role, string> = {
-  admin: "موافقة على الأطراف · إعدادات النظام",
-  ngo: "مناطق التغطية · مهام التوزيع",
-  provider: "وضع إنساني + تجاري · إدارة الأسطول",
-  driver: "تنفيذ التوصيل · دليل الاستلام",
-  citizen: "إشارة الاحتياج · الطلبات التجارية",
-};
 
 const emptyAuthForm = (): AuthForm => ({
   role: "ngo",
@@ -109,39 +66,6 @@ const emptyAuthForm = (): AuthForm => ({
   lat: "",
   lng: "",
 });
-
-const roleStatusLabel = (status: AuthUser["roleStatus"]) => ({
-  approved: "معتمد",
-  pending: "بانتظار الموافقة",
-  rejected: "مرفوض",
-})[status];
-
-function getProfileDraft(user: AuthUser): ProfileDraft {
-  const base = emptyAuthForm();
-  const profile = user.profile ?? {};
-  return {
-    ...base,
-    role: user.role,
-    firstName: user.firstName ?? "",
-    lastName: user.lastName ?? "",
-    email: user.email ?? "",
-    orgName: profile.orgName ?? "",
-    country: profile.country ?? "فلسطين",
-    companyName: profile.companyName ?? "",
-    contactEmail: profile.contactEmail ?? "",
-    description: profile.description ?? "",
-    operatingModes: Array.isArray(profile.operatingModes) ? profile.operatingModes : ["commercial"],
-    driverType: profile.driverType ?? "independent",
-    providerId: profile.providerId ?? "",
-    phone: profile.phone ?? "",
-    vehicleType: profile.vehicleType ?? "",
-    zoneId: profile.zoneId ?? "",
-    lat: profile.lat ?? "",
-    lng: profile.lng ?? "",
-    currentPassword: "",
-    newPassword: "",
-  };
-}
 
 function AuthScreen({ onAuth }: { onAuth: (user: AuthUser) => void }) {
   const [mode, setMode] = useState<AuthMode>("login");
@@ -225,14 +149,14 @@ function AuthScreen({ onAuth }: { onAuth: (user: AuthUser) => void }) {
   );
 }
 
-function RoleFields({
+export function RoleFields({
   form,
   setForm,
   zones,
   providers,
   showAdminCode = false,
 }: {
-  form: AuthForm | ProfileDraft;
+  form: AuthForm | (AuthForm & { currentPassword: string; newPassword: string });
   setForm: Dispatch<SetStateAction<any>>;
   zones: Zone[];
   providers: Provider[];
@@ -307,28 +231,58 @@ function RoleFields({
   );
 }
 
+function AuthenticatedApp({
+  user,
+  setUser,
+}: {
+  user: AuthUser;
+  setUser: Dispatch<SetStateAction<AuthUser | null>>;
+}) {
+  const logout = async () => {
+    await api.post("/auth/logout", {});
+    setUser(null);
+  };
+
+  return (
+    <Routes>
+      <Route element={<AppLayout user={user} setUser={setUser} onLogout={logout} />}>
+        <Route index element={<Navigate to={ROLE_HOME[user.role]} replace />} />
+
+        <Route element={<RequireRole role="admin" />}>
+          <Route path="/admin" element={<AdminPortal />} />
+          <Route path="/admin/map" element={<MapView />} />
+        </Route>
+
+        <Route element={<RequireRole role="ngo" />}>
+          <Route path="/ngo" element={<Navigate to={DEFAULT_NGO_PATH} replace />} />
+          <Route path="/ngo/map" element={<MapView />} />
+          <Route path="/ngo/:section" element={<NgoPortal />} />
+        </Route>
+
+        <Route element={<RequireRole role="provider" />}>
+          <Route path="/provider" element={<ProviderPortal />} />
+          <Route path="/provider/map" element={<MapView />} />
+        </Route>
+
+        <Route element={<RequireRole role="driver" />}>
+          <Route path="/driver" element={<DriverPortal />} />
+          <Route path="/driver/map" element={<MapView />} />
+        </Route>
+
+        <Route element={<RequireRole role="citizen" />}>
+          <Route path="/citizen" element={<Citizen />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to={ROLE_HOME[user.role]} replace />} />
+      </Route>
+    </Routes>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [page, setPage] = useState<AppPageId>("main");
-  const [collapsedNavGroups, setCollapsedNavGroups] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(NGO_NAV_GROUPS.map(g => [g.id, !g.defaultOpen])),
-  );
-  const [ngoBadges, setNgoBadges] = useState({ active: 0, delivered: 0 });
-  const [profileDraft, setProfileDraft] = useState<ProfileDraft>(() => ({ ...emptyAuthForm(), currentPassword: "", newPassword: "" }));
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const [zones, setZones] = useState<Zone[]>([]);
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  const role = user?.role ?? "citizen";
-  const currentRole = ROLES.find(r => r.id === role)!;
-  const displayName = user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : "مستخدم Qatra";
-  const initials = `${user?.firstName?.trim().charAt(0) ?? "Q"}${user?.lastName?.trim().charAt(0) ?? ""}`;
-  const statusClass = `role-status role-status-${user?.roleStatus ?? "approved"}`;
+  const navigate = useNavigate();
 
   useEffect(() => {
     api.get<AuthUser>("/auth/me")
@@ -337,247 +291,25 @@ export default function App() {
       .finally(() => setAuthLoading(false));
   }, []);
 
-  useEffect(() => {
-    Promise.all([
-      api.get<{ data: Zone[] }>("/zones").then(res => setZones(res.data)).catch(() => undefined),
-      api.get<{ data: Provider[] }>("/providers").then(res => setProviders(res.data.filter(provider => provider.status === "approved"))).catch(() => undefined),
-    ]);
-  }, []);
-
-  useEffect(() => {
-    if (user?.role === "ngo" && page === "main") {
-      setPage(DEFAULT_NGO_PAGE);
-    }
-  }, [user?.role, page]);
-
-  useEffect(() => {
-    if (user?.role !== "ngo") return;
-    fetch("/api/tasks")
-      .then(r => r.json())
-      .then(res => {
-        const tasks = res.data ?? [];
-        setNgoBadges({
-          active: tasks.filter((t: { status: string }) => t.status === "pending" || t.status === "in_progress").length,
-          delivered: tasks.filter((t: { status: string }) => t.status === "delivered").length,
-        });
-      })
-      .catch(() => undefined);
-  }, [user?.role, page]);
-
-  const toggleNavGroup = (groupId: string) => {
-    setCollapsedNavGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
-  };
-
-  const ngoBadgeFor = (key?: "active" | "delivered") => {
-    if (!key) return null;
-    const value = ngoBadges[key];
-    return value > 0 ? value : null;
-  };
-
-  useEffect(() => {
-    const onPointerDown = (event: PointerEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, []);
-
-  const roleFieldsOptions = useMemo(() => ({ zones, providers }), [zones, providers]);
-
-  const renderPage = () => {
-    if (page === "map") return <MapView />;
-    const ngoSection = ngoSectionFromPage(page);
-    if (ngoSection) return <NgoPortal section={ngoSection} />;
-    switch (role) {
-      case "admin": return <AdminPortal />;
-      case "provider": return <ProviderPortal />;
-      case "driver": return <DriverPortal />;
-      case "citizen": return <Citizen />;
-      default: return null;
-    }
-  };
-
-  const openProfile = () => {
-    if (!user) return;
-    setMenuOpen(false);
-    setProfileError(null);
-    setProfileDraft(getProfileDraft(user));
-    setProfileOpen(true);
-  };
-
-  const logout = async () => {
-    setMenuOpen(false);
-    setProfileOpen(false);
-    await api.post("/auth/logout", {});
-    setUser(null);
-    setPage("main");
-  };
-
-  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!user) return;
-    setSavingProfile(true);
-    setProfileError(null);
-    try {
-      const updated = await api.patch<AuthUser>("/auth/me", profileDraft);
-      setUser(updated);
-      setProfileOpen(false);
-    } catch (error) {
-      setProfileError(error instanceof Error ? error.message : "تعذر حفظ التغييرات");
-    } finally {
-      setSavingProfile(false);
-    }
-  };
-
-  if (authLoading) return <div className="loading auth-loading"><div className="spinner" /><p>جارٍ تحميل الجلسة...</p></div>;
-  if (!user) return <AuthScreen onAuth={setUser} />;
-
-  return (
-    <div className="layout" dir="rtl">
-      <aside className="sidebar">
-        <div className="sidebar-logo">
-          <h1>Qatra v3</h1>
-          <span>منصة توزيع المياه</span>
-        </div>
-
-        <div className="current-role-info role-info-fixed" style={{ borderColor: currentRole.color + "22" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: currentRole.color }}>{currentRole.label}</span>
-            <span className={statusClass}>{roleStatusLabel(user.roleStatus)}</span>
-          </div>
-          <div style={{ fontSize: 11, color: "#6b8aa0", lineHeight: 1.4 }}>{ROLE_DESCRIPTIONS[role]}</div>
-        </div>
-
-        <nav className="sidebar-nav" style={{ marginTop: 8 }}>
-          {role === "ngo" ? (
-            <>
-              {NGO_NAV_GROUPS.map(group => {
-                const collapsed = collapsedNavGroups[group.id];
-                return (
-                  <div key={group.id} className="nav-group">
-                    <button
-                      type="button"
-                      className="nav-group-toggle"
-                      onClick={() => toggleNavGroup(group.id)}
-                      aria-expanded={!collapsed}
-                    >
-                      <span>{group.label}</span>
-                      <span className={`nav-group-chevron ${collapsed ? "nav-group-chevron-collapsed" : ""}`} aria-hidden>▾</span>
-                    </button>
-                    {!collapsed && group.items.map(item => {
-                      const badge = ngoBadgeFor(item.badgeKey);
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`nav-item nav-sub-item ${page === item.id ? "active" : ""}`}
-                          onClick={() => setPage(item.id as AppPageId)}
-                        >
-                          <span>{item.label}</span>
-                          {badge != null && (
-                            <span className={`nav-item-badge ${item.badgeKey === "delivered" ? "nav-item-badge-green" : ""}`}>
-                              {badge}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-              {NGO_STANDALONE_NAV.map(item => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`nav-item ${page === item.id ? "active" : ""}`}
-                  onClick={() => setPage(item.id as AppPageId)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </>
-          ) : (
-            ROLE_NAV[role].map(item => (
-              <button
-                key={item.id}
-                className={`nav-item ${page === item.id ? "active" : ""}`}
-                onClick={() => setPage(item.id)}
-              >
-                {item.label}
-              </button>
-            ))
-          )}
-        </nav>
-
-        <div style={{ marginTop: "auto", padding: "16px 20px", borderTop: "1px solid #d8eef8" }}>
-          <div style={{ fontSize: 11, color: "#6b8aa0", marginBottom: 2 }}>جلسة نشطة</div>
-          <div style={{ fontSize: 11, color: "#8eb5c8" }}>{user.email}</div>
-        </div>
-      </aside>
-
-      <div className="main" style={page === "map" ? { display: "flex", flexDirection: "column" } : {}}>
-        <header className="app-header">
-          <div>
-            <h2>{pageLabel(page, role)}</h2>
-            <span>{ROLE_DESCRIPTIONS[role]}</span>
-          </div>
-
-          <div className="user-menu" ref={menuRef}>
-            <button className="user-menu-trigger" onClick={() => setMenuOpen(open => !open)} aria-haspopup="menu" aria-expanded={menuOpen}>
-              <span className="avatar" style={{ background: currentRole.color }}>{initials}</span>
-              <span className="user-menu-copy">
-                <strong>{displayName}</strong>
-                <small>{currentRole.label} · {roleStatusLabel(user.roleStatus)}</small>
-              </span>
-              <span className="user-menu-chevron">⌄</span>
-            </button>
-
-            {menuOpen && (
-              <div className="user-dropdown" role="menu">
-                <button onClick={openProfile} role="menuitem">إعدادات الملف الشخصي</button>
-                <button onClick={logout} role="menuitem">تسجيل الخروج</button>
-              </div>
-            )}
-          </div>
-        </header>
-
-        {renderPage()}
+  if (authLoading) {
+    return (
+      <div className="loading auth-loading">
+        <div className="spinner" />
+        <p>جارٍ تحميل الجلسة...</p>
       </div>
+    );
+  }
 
-      {profileOpen && (
-        <div className="modal-backdrop" onClick={() => setProfileOpen(false)}>
-          <form className="modal profile-modal" onSubmit={saveProfile} onClick={event => event.stopPropagation()}>
-            <h3>إعدادات الملف الشخصي</h3>
-            <div className="profile-modal-user">
-              <span className="avatar avatar-lg" style={{ background: currentRole.color }}>{initials}</span>
-              <div>
-                <strong>{displayName}</strong>
-                <span>{currentRole.label} · {roleStatusLabel(user.roleStatus)}</span>
-              </div>
-            </div>
+  if (!user) {
+    return (
+      <AuthScreen
+        onAuth={nextUser => {
+          setUser(nextUser);
+          navigate(ROLE_HOME[nextUser.role], { replace: true });
+        }}
+      />
+    );
+  }
 
-            <div className="auth-grid">
-              <label className="form-label">الاسم الأول<input value={profileDraft.firstName} onChange={event => setProfileDraft(draft => ({ ...draft, firstName: event.target.value }))} required /></label>
-              <label className="form-label">اسم العائلة<input value={profileDraft.lastName} onChange={event => setProfileDraft(draft => ({ ...draft, lastName: event.target.value }))} required /></label>
-            </div>
-            <label className="form-label">البريد الإلكتروني<input type="email" value={profileDraft.email} onChange={event => setProfileDraft(draft => ({ ...draft, email: event.target.value }))} required /></label>
-            <RoleFields form={profileDraft} setForm={setProfileDraft} {...roleFieldsOptions} />
-            <div className="auth-grid">
-              <label className="form-label">كلمة المرور الحالية<input type="password" value={profileDraft.currentPassword} onChange={event => setProfileDraft(draft => ({ ...draft, currentPassword: event.target.value }))} /></label>
-              <label className="form-label">كلمة مرور جديدة<input type="password" value={profileDraft.newPassword} onChange={event => setProfileDraft(draft => ({ ...draft, newPassword: event.target.value }))} minLength={8} /></label>
-            </div>
-
-            {profileError && <div className="form-error">{profileError}</div>}
-
-            <div className="modal-actions">
-              <button type="button" className="btn btn-outline" onClick={() => setProfileOpen(false)}>إلغاء</button>
-              <button type="submit" className="btn btn-primary" disabled={savingProfile}>
-                {savingProfile ? "جارٍ الحفظ..." : "حفظ التغييرات"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-    </div>
-  );
+  return <AuthenticatedApp user={user} setUser={setUser} />;
 }

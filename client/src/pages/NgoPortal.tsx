@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import "leaflet/dist/leaflet.css";
 import type { Map as LeafletMap, LayerGroup } from "leaflet";
+import { Navigate, useParams } from "react-router-dom";
 import NgoContractsTab from "../components/ngo/NgoContractsTab";
 import NgoReportsTab from "../components/ngo/NgoReportsTab";
-import type { NgoSection } from "../ngoNav";
+import { isNgoSection } from "../routes";
 
 const MY_NGO_ID = "seed-n1";
 
@@ -89,9 +90,9 @@ function getSlotTask(tasks: Task[], zoneId: string, dayStr: string, slotH: numbe
   });
 }
 
-type Props = { section: NgoSection };
-
-export default function NgoPortal({ section: tab }: Props) {
+export default function NgoPortal() {
+  const { section } = useParams<{ section: string }>();
+  const tab = isNgoSection(section) ? section : "dashboard";
   const [zones, setZones] = useState<Zone[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -258,6 +259,10 @@ export default function NgoPortal({ section: tab }: Props) {
   const totalSignals = zones.reduce((s, z) => s + (z.signalCount ?? 0), 0);
   const activeTasks = tasks.filter(t => t.status === "in_progress" || t.status === "pending");
   const deliveredTasks = tasks.filter(t => t.status === "delivered");
+
+  if (!isNgoSection(section)) {
+    return <Navigate to="/ngo/dashboard" replace />;
+  }
 
   return (
     <div className="portal ngo-portal" dir="rtl">
