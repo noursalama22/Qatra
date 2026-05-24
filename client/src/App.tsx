@@ -72,7 +72,7 @@ const ROLE_NAV: Record<Role, { id: string; label: string }[]> = {
   provider: [
     { id: "main", label: "لوحة التحكم" },
     { id: "contracts", label: "العقود" },
-    { id: "fleet", label: "الأسطول" },
+    { id: "fleet", label: "إدارة السائقين" },
     { id: "map", label: "الخريطة الحية" },
   ],
   driver: [
