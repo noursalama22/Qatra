@@ -560,6 +560,24 @@ app.get("/api/stats", async (_req, res) => {
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+// ── GPS Positions ──────────────────────────────────────────────────────────
+
+app.post("/api/gps", async (req, res) => {
+  try {
+    const { driverId, lat, lng } = req.body;
+    if (!driverId || lat == null || lng == null) {
+      return res.status(400).json({ error: "driverId, lat, lng required" });
+    }
+    const [pos] = await db.insert(gpsPositionsTable).values({
+      driverId,
+      taskId: null,
+      lat: String(lat),
+      lng: String(lng),
+    }).returning();
+    res.status(201).json(pos);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 // ── Map Endpoint ───────────────────────────────────────────────────────────
 
 app.get("/api/map", async (_req, res) => {
