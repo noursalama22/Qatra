@@ -5,6 +5,7 @@ import ProviderPortal from "./pages/ProviderPortal";
 import ProviderContracts from "./pages/ProviderContracts";
 import ProviderFleet from "./pages/ProviderFleet";
 import DriverInvite from "./pages/DriverInvite";
+import NotificationBell from "./components/NotificationBell";
 import DriverPortal from "./pages/DriverPortal";
 import Citizen from "./pages/Citizen";
 import MapView from "./pages/MapView";
@@ -361,7 +362,7 @@ export default function App() {
     switch (role) {
       case "admin": return <AdminPortal />;
       case "ngo": return <NgoPortal />;
-      case "provider": return <ProviderPortal />;
+      case "provider": return <ProviderPortal onNavigate={p => setPage(p as any)} />;
       case "driver": return <DriverPortal />;
       case "citizen": return <Citizen />;
     }
@@ -443,6 +444,10 @@ export default function App() {
             <h2>{page === "map" ? "الخريطة الحية" : currentRole.label}</h2>
             <span>{ROLE_DESCRIPTIONS[role]}</span>
           </div>
+
+          {role === "provider" && (
+            <NotificationBell onNavigate={p => setPage(p as any)} />
+          )}
 
           <div className="user-menu" ref={menuRef}>
             <button className="user-menu-trigger" onClick={() => setMenuOpen(open => !open)} aria-haspopup="menu" aria-expanded={menuOpen}>

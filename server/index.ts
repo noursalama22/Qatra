@@ -750,6 +750,50 @@ app.patch("/api/trucks/:id", async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+// ── Provider Notifications ──────────────────────────────────────────────────
+
+app.get("/api/provider-notifications", async (req, res) => {
+  try {
+    const providerId = req.query.providerId as string;
+    if (!providerId) return res.status(400).json({ error: "providerId required" });
+
+    const [reviewContracts, acceptedInvites] = await Promise.all([
+      db.select().from(contractsTable)
+        .where(and(eq(contractsTable.providerId, providerId), eq(contractsTable.status, "review")))
+        .orderBy(desc(contractsTable.createdAt)),
+      db.select().from(providerDriverInvitesTable)
+        .where(and(eq(providerDriverInvitesTable.providerId, providerId), eq(providerDriverInvitesTable.status, "accepted")))
+        .orderBy(desc(providerDriverInvitesTable.createdAt))
+        .limit(5),
+    ]);
+
+    const notifications = [
+      ...reviewContracts.map(c => ({
+        id: `contract-${c.id}`,
+        type: "new_contract",
+        title: "عقد جديد بانتظار موافقتك",
+        message: `${c.clientName} — ${Number(c.valueAed).toLocaleString("ar-AE")} د.إ.`,
+        entityId: c.id,
+        entityPage: "contracts",
+        priority: c.priority,
+        createdAt: c.createdAt,
+      })),
+      ...acceptedInvites.map(inv => ({
+        id: `invite-${inv.id}`,
+        type: "driver_accepted",
+        title: "قبل سائق دعوتك",
+        message: `${inv.fullName} — ${inv.phone}`,
+        entityId: inv.id,
+        entityPage: "fleet",
+        priority: "normal",
+        createdAt: inv.createdAt,
+      })),
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json({ data: notifications, total: notifications.length });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 // ── Provider Driver Invitations ─────────────────────────────────────────────
 
 app.get("/api/provider-drivers", async (req, res) => {

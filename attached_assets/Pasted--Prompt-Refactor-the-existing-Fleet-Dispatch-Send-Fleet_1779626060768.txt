@@ -1,0 +1,152 @@
+📌 Prompt
+
+Refactor the existing “Fleet Dispatch / Send Fleet” screen into a modern multi-step “Dispatch Wizard” for a smart water distribution system.
+
+The goal is to improve UX by converting the current dashboard-style screen into a guided step-by-step workflow.
+
+🎯 CORE OBJECTIVE
+
+Replace the current dispatch UI with a clean wizard that guides the Service Provider through:
+
+Selecting a trip
+Reviewing trip details
+Assigning resources
+Confirming dispatch
+
+Remove clutter such as resource counters (e.g., “2/5 trucks available”) from the main dispatch flow.
+
+🧩 WIZARD STRUCTURE
+STEP 1 — Select Trip
+
+Create a clean list or card view of scheduled trips.
+
+Each trip should show:
+
+Trip ID
+Destination name
+Water quantity (liters)
+Location
+Scheduled date
+Priority level (if available)
+
+User action:
+
+Select one trip
+Click “Next”
+STEP 2 — Trip Summary
+
+After selecting a trip, show a summary panel:
+
+Display:
+
+Destination
+Total water volume required
+Location details
+Scheduled time/date
+Any notes or contract reference
+
+Include a “Back” and “Next” button.
+
+STEP 3 — Smart Assignment (Core Step)
+
+Replace manual resource browsing with a simplified assignment UI.
+
+Show two sections:
+
+1. Suggested Assignment (optional smart logic UI)
+Recommended drivers (based on availability)
+Suggested trucks (optional or can be removed if not needed)
+2. Manual Override
+
+Allow selection:
+
+Driver dropdown (only active drivers under provider)
+Optional truck dropdown (if system supports fleet vehicles)
+
+IMPORTANT:
+
+Focus should be on selecting DRIVER primarily
+Truck selection should be optional or hidden by default if system is simplified
+STEP 4 — Dispatch Confirmation
+
+Show final confirmation screen:
+
+Include:
+
+Selected trip summary
+Assigned driver
+(Optional) assigned truck
+Estimated start time
+
+Button:
+
+“Confirm Dispatch”
+
+On confirm:
+
+Create a TripAssignment record
+Set status = “assigned”
+Trigger success message:
+"Trip successfully dispatched"
+🧠 UX IMPROVEMENTS (IMPORTANT)
+REMOVE from UI:
+Resource counters (e.g., 2/5 trucks available)
+Complex availability panels
+Side clutter panels during dispatch
+REPLACE WITH:
+Clean step indicator (Step 1 → Step 2 → Step 3 → Step 4)
+Focused decision making
+Minimal distractions
+📊 DATA MODELS (if needed)
+
+TripAssignment:
+
+id
+tripId
+driverId
+truckId (optional)
+providerId
+status: "assigned"
+createdAt
+
+Driver:
+
+id
+name
+status: active | inactive
+zone
+
+Trip:
+
+id
+destination
+waterVolume
+location
+scheduledDate
+🎨 UI REQUIREMENTS
+Modern dashboard UI (clean, minimal)
+Stepper at top (wizard progress indicator)
+Card-based design for trips
+Modal or full-page step transitions
+Mobile responsive
+Use badges for priority (High / Medium / Low)
+⚙️ TECH REQUIREMENTS
+React or Next.js
+Component-based structure:
+DispatchWizard.tsx
+TripSelector.tsx
+AssignmentStep.tsx
+ConfirmationStep.tsx
+Use mock data if backend not available
+Keep state between steps (wizard state management)
+🚀 FINAL GOAL
+
+A professional Dispatch Wizard that:
+
+Simplifies fleet dispatching
+Reduces cognitive load
+Makes assignment fast and intuitive
+Works like Uber-style logistics dashboards
+🟢 END RESULT
+
+A clean step-by-step dispatch flow instead of a complex dashboard.

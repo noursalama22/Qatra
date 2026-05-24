@@ -75,11 +75,20 @@ function fmtVol(n: number) {
   return n.toLocaleString("ar-AE") + " لتر";
 }
 
-export default function ProviderPortal() {
+type ReviewContract = {
+  id: string;
+  contractNumber: string;
+  clientName: string;
+  valueAed: string;
+  priority: string;
+};
+
+export default function ProviderPortal({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const [reviewContracts, setReviewContracts] = useState<ReviewContract[]>([]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -91,10 +100,12 @@ export default function ProviderPortal() {
       fetch("/api/drivers").then(r => r.json()),
       fetch("/api/tasks").then(r => r.json()),
       fetch("/api/orders").then(r => r.json()),
-    ]).then(([d, t, o]) => {
+      fetch(`/api/contracts?providerId=${DEMO_PROVIDER_ID}`).then(r => r.json()),
+    ]).then(([d, t, o, c]) => {
       setDrivers((d.data ?? []).filter((dr: Driver) => dr.providerId === DEMO_PROVIDER_ID));
       setTasks(t.data ?? []);
       setOrders(o.data ?? []);
+      setReviewContracts((c.data ?? []).filter((ct: any) => ct.status === "review"));
     });
   }, []);
 
@@ -109,10 +120,48 @@ export default function ProviderPortal() {
       {toast && <div className="action-toast">{toast}</div>}
 
       {/* ── Page Title ── */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: reviewContracts.length > 0 ? 16 : 24 }}>
         <h2 style={{ fontSize: 24, fontWeight: 800, color: "#12384f", marginBottom: 4 }}>لوحة العمليات</h2>
         <p style={{ fontSize: 13, color: "#6b8aa0" }}>نظرة فورية على العقود والأسطول وعمليات التوصيل النشطة.</p>
       </div>
+
+      {/* ── New Contract Alert Banner ── */}
+      {reviewContracts.length > 0 && (
+        <div style={{ background: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)", border: "1px solid #fcd34d", borderRadius: 14, padding: "16px 20px", marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: "#fef3c7", border: "2px solid #f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
+              📋
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: "#92400e" }}>
+                  {reviewContracts.length === 1 ? "عقد جديد بانتظار موافقتك" : `${reviewContracts.length} عقود بانتظار موافقتك`}
+                </span>
+                <span style={{ background: "#f59e0b", color: "white", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 20 }}>
+                  {reviewContracts.length} جديد
+                </span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {reviewContracts.map(c => (
+                  <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, background: "white", border: "1px solid #fcd34d", borderRadius: 8, padding: "5px 11px" }}>
+                    {c.priority === "vip" && <span style={{ background: "#0ea5e9", color: "white", fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 20 }}>VIP</span>}
+                    {c.priority === "high" && <span style={{ background: "#f59e0b", color: "white", fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 20 }}>أولوية</span>}
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#12384f" }}>{c.clientName}</span>
+                    <span style={{ fontSize: 11, color: "#6b8aa0" }}>—</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#0284c7" }}>{Number(c.valueAed).toLocaleString("ar-AE")} د.إ.</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate?.("contracts")}
+            style={{ background: "linear-gradient(135deg, #d97706, #f59e0b)", color: "white", border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+          >
+            مراجعة العقود ←
+          </button>
+        </div>
+      )}
 
       {/* ── KPI Cards ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
