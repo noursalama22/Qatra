@@ -1,187 +1,578 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import type { Map as LeafletMap, Marker, Polygon } from "leaflet";
+import "leaflet/dist/leaflet.css";
 
-type Task = { id: string; zoneId: string; status: string; quantityLiters: string; scheduledAt: string; notes: string | null };
-type Zone = { id: string; name: string; populationEstimate: number; lastDeliveryAt: string | null };
+type Stage = "list" | "accept" | "route" | "navigate" | "proof" | "complete";
 
-const DEMO_DRIVER_ID = "seed-d1";
-const STATUS_LABELS: Record<string, string> = { pending: "مجدولة", in_progress: "جارية الآن", delivered: "مُنجزة", cancelled: "ملغاة" };
-const STATUS_COLORS: Record<string, string> = { pending: "#f59e0b", in_progress: "#0ea5e9", delivered: "#14b8a6", cancelled: "#8eb5c8" };
+type Task = {
+  id: string;
+  zoneId: string;
+  status: string;
+  quantityLiters: string;
+  scheduledAt: string;
+  notes: string | null;
+};
 
-type ProofState = { taskId: string; step: "idle" | "photo" | "done" };
+type Zone = {
+  id: string;
+  name: string;
+  populationEstimate: number | null;
+  boundary: [number, number][] | null;
+};
+
+type AuthUser = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  profile: {
+    id: string;
+    driverType: string;
+    vehicleType: string | null;
+    phone: string | null;
+    status: string;
+  } | null;
+};
+
+const OFFLINE_KEY = "qatra_driver_proof_queue";
+
+function centroid(pts: [number, number][]): [number, number] {
+  const lat = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+  const lng = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+  return [lat, lng];
+}
 
 export default function DriverPortal() {
+  const [stage, setStage] = useState<Stage>("list");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [gpsPos, setGpsPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [offlineCount, setOfflineCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  const [proof, setProof] = useState<ProofState>({ taskId: "", step: "idle" });
-  const [filter, setFilter] = useState<"all" | "pending" | "in_progress" | "delivered">("all");
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofPreview, setProofPreview] = useState<string | null>(null);
+  const [completing, setCompleting] = useState(false);
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+  const mapDivRef = useRef<HTMLDivElement>(null);
+  const leafletRef = useRef<LeafletMap | null>(null);
+  const driverMarkerRef = useRef<Marker | null>(null);
+  const zonePolyRef = useRef<Polygon | null>(null);
+  const gpsPosRef = useRef<{ lat: number; lng: number } | null>(null);
+  const userRef = useRef<AuthUser | null>(null);
+  const activeTaskRef = useRef<Task | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const load = async () => {
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const loadTasks = useCallback(async () => {
     const [t, z] = await Promise.all([
       fetch("/api/tasks").then(r => r.json()),
       fetch("/api/zones").then(r => r.json()),
     ]);
     setTasks(t.data ?? []);
     setZones(z.data ?? []);
-  };
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  const loadOfflineCount = useCallback(() => {
+    const q = JSON.parse(localStorage.getItem(OFFLINE_KEY) ?? "[]");
+    setOfflineCount(q.length);
+  }, []);
 
-  const startTask = async (id: string) => {
-    await fetch(`/api/tasks/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "in_progress" }) });
-    showToast(" بدأت رحلة التوصيل — GPS نشط");
-    load();
-  };
+  const syncOfflineQueue = useCallback(async () => {
+    const queue: Array<{ taskId: string }> = JSON.parse(localStorage.getItem(OFFLINE_KEY) ?? "[]");
+    if (!queue.length) return;
+    const synced: string[] = [];
+    for (const item of queue) {
+      try {
+        await fetch(`/api/tasks/${item.taskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "delivered" }),
+        });
+        synced.push(item.taskId);
+      } catch {}
+    }
+    const remaining = queue.filter(q => !synced.includes(q.taskId));
+    localStorage.setItem(OFFLINE_KEY, JSON.stringify(remaining));
+    if (synced.length) {
+      showToast(`✓ تمت مزامنة ${synced.length} مهمة محلية`);
+      loadTasks();
+    }
+    loadOfflineCount();
+  }, [loadTasks, loadOfflineCount]);
 
-  const startProof = (taskId: string) => setProof({ taskId, step: "photo" });
+  useEffect(() => {
+    fetch("/api/auth/me").then(r => r.json()).then(u => {
+      setUser(u);
+      userRef.current = u;
+    }).catch(() => {});
+    loadTasks();
+    loadOfflineCount();
 
-  const submitProof = async () => {
-    setProof(p => ({ ...p, step: "done" }));
-    await new Promise(r => setTimeout(r, 1500));
-    await fetch(`/api/tasks/${proof.taskId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "delivered" }) });
-    setProof({ taskId: "", step: "idle" });
-    showToast(" تم تسليم المياه بنجاح وإغلاق المهمة");
-    load();
-  };
+    const goOnline = () => { setIsOnline(true); syncOfflineQueue(); };
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+      stopGps();
+    };
+  }, []);
 
-  const filtered = tasks.filter(t => filter === "all" ? t.status !== "cancelled" : t.status === filter);
+  useEffect(() => { gpsPosRef.current = gpsPos; }, [gpsPos]);
+  useEffect(() => { activeTaskRef.current = activeTask; }, [activeTask]);
+
+  useEffect(() => {
+    if (stage !== "navigate") {
+      if (leafletRef.current) { leafletRef.current.remove(); leafletRef.current = null; }
+      driverMarkerRef.current = null;
+      zonePolyRef.current = null;
+      return;
+    }
+    const timer = setTimeout(async () => {
+      if (!mapDivRef.current || leafletRef.current) return;
+      const L = (await import("leaflet")).default;
+      const task = activeTaskRef.current;
+      const taskZones = zones;
+      const zone = task ? taskZones.find(z => z.id === task.zoneId) : null;
+      const boundary = zone?.boundary ?? null;
+      const center: [number, number] = boundary ? centroid(boundary) : [31.5, 34.45];
+
+      const map = L.map(mapDivRef.current, { center, zoom: 14, zoomControl: false });
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap",
+      }).addTo(map);
+
+      if (boundary) {
+        zonePolyRef.current = L.polygon(boundary, {
+          color: "#f59e0b", weight: 2.5, fillColor: "#f59e0b", fillOpacity: 0.15,
+        }).addTo(map) as unknown as Polygon;
+      }
+
+      L.control.zoom({ position: "bottomleft" }).addTo(map);
+      leafletRef.current = map;
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [stage]);
+
+  useEffect(() => {
+    if (!leafletRef.current || !gpsPos) return;
+    import("leaflet").then(({ default: L }) => {
+      const { lat, lng } = gpsPos;
+      const icon = L.divIcon({ html: `<div class="dpwa-driver-dot"></div>`, iconSize: [18, 18], className: "" });
+      if (driverMarkerRef.current) {
+        driverMarkerRef.current.setLatLng([lat, lng]);
+      } else if (leafletRef.current) {
+        driverMarkerRef.current = L.marker([lat, lng], { icon }).addTo(leafletRef.current) as unknown as Marker;
+      }
+    });
+  }, [gpsPos]);
+
+  function startGps() {
+    if (!navigator.geolocation) return;
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      pos => {
+        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setGpsPos(p);
+        gpsPosRef.current = p;
+      },
+      null,
+      { enableHighAccuracy: true, maximumAge: 5000 }
+    );
+    gpsIntervalRef.current = setInterval(() => {
+      const pos = gpsPosRef.current;
+      const u = userRef.current;
+      const task = activeTaskRef.current;
+      if (!pos || !u?.profile?.id) return;
+      fetch("/api/gps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ driverId: u.profile.id, lat: pos.lat, lng: pos.lng, taskId: task?.id ?? null }),
+      }).catch(() => {});
+    }, 10000);
+  }
+
+  function stopGps() {
+    if (watchIdRef.current !== null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
+    if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null; }
+  }
+
+  function acceptTask(task: Task) { setActiveTask(task); activeTaskRef.current = task; setStage("accept"); }
+
+  async function startRoute() {
+    if (!activeTask) return;
+    await fetch(`/api/tasks/${activeTask.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "in_progress" }),
+    });
+    setActiveTask(t => t ? { ...t, status: "in_progress" } : t);
+    startGps();
+    setStage("navigate");
+    showToast("📡 GPS نشط — يتم إرسال موقعك كل 10 ثوانٍ");
+  }
+
+  function handleProofFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProofFile(file);
+    const reader = new FileReader();
+    reader.onload = ev => setProofPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  async function submitProof() {
+    if (!activeTask || !proofFile) return;
+    setCompleting(true);
+    try {
+      if (navigator.onLine) {
+        await fetch(`/api/tasks/${activeTask.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "delivered" }),
+        });
+      } else {
+        const queue = JSON.parse(localStorage.getItem(OFFLINE_KEY) ?? "[]");
+        queue.push({ taskId: activeTask.id, timestamp: new Date().toISOString(), lat: gpsPosRef.current?.lat, lng: gpsPosRef.current?.lng });
+        localStorage.setItem(OFFLINE_KEY, JSON.stringify(queue));
+        loadOfflineCount();
+      }
+      stopGps();
+      setStage("complete");
+    } catch {
+      const queue = JSON.parse(localStorage.getItem(OFFLINE_KEY) ?? "[]");
+      queue.push({ taskId: activeTask.id, timestamp: new Date().toISOString(), lat: gpsPosRef.current?.lat, lng: gpsPosRef.current?.lng });
+      localStorage.setItem(OFFLINE_KEY, JSON.stringify(queue));
+      loadOfflineCount();
+      stopGps();
+      setStage("complete");
+    } finally {
+      setCompleting(false);
+    }
+  }
+
+  function backToList() {
+    stopGps();
+    setActiveTask(null);
+    activeTaskRef.current = null;
+    setProofFile(null);
+    setProofPreview(null);
+    setStage("list");
+    loadTasks();
+    loadOfflineCount();
+  }
+
+  const activeZone = activeTask ? zones.find(z => z.id === activeTask.zoneId) : null;
+  const pendingTasks = tasks.filter(t => t.status === "pending");
   const inProgressTask = tasks.find(t => t.status === "in_progress");
-  const totalDelivered = tasks.filter(t => t.status === "delivered").reduce((s, t) => s + Number(t.quantityLiters), 0);
+  const deliveredLiters = tasks.filter(t => t.status === "delivered").reduce((s, t) => s + Number(t.quantityLiters), 0);
 
   return (
-    <div className="portal driver-portal" dir="rtl">
-      {toast && <div className="action-toast">{toast}</div>}
+    <>
+      {toast && <div className="dpwa-toast">{toast}</div>}
 
-      {/* Proof Modal */}
-      {proof.step !== "idle" && (
-        <div className="modal-overlay">
-          <div className="modal proof-modal" dir="rtl">
-            <div className="proof-modal-icon"></div>
-            {proof.step === "photo" && (
-              <>
-                <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>التقاط دليل التسليم</div>
-                <div style={{ fontSize: 13, color: "#6b8aa0", marginBottom: 20 }}>الصورة مطلوبة قبل إغلاق المهمة</div>
-                <div className="proof-camera-preview">
-                  <div className="camera-frame">
-                    <div className="camera-corner tl" /><div className="camera-corner tr" />
-                    <div className="camera-corner bl" /><div className="camera-corner br" />
-                    <div style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: 40, marginBottom: 8 }}></div>
-                      <div style={{ fontSize: 12, color: "#8eb5c8" }}>موقع GPS مؤكد</div>
-                      <div style={{ fontSize: 11, color: "#b9d7e6", marginTop: 4 }}>36.244°N · 37.175°E</div>
-                    </div>
-                  </div>
+      {/* ── LIST STAGE ─────────────────────────────────────────── */}
+      {stage === "list" && (
+        <div className="driver-pwa-list" dir="rtl">
+          <div className="dpwa-list-header">
+            <div className="dpwa-list-header-top">
+              <div>
+                <div className="dpwa-greeting">مرحباً، {user ? `${user.firstName} ${user.lastName}` : "السائق"}</div>
+                <div className="dpwa-greeting-sub">
+                  {user?.profile?.vehicleType ?? "شاحنة مياه"} ·{" "}
+                  {user?.profile?.driverType === "independent" ? "مستقل" : "تابع لمزود"}
                 </div>
-                <div className="proof-buttons">
-                  <button className="btn btn-primary proof-capture-btn" onClick={submitProof}> التقاط الصورة وإغلاق المهمة</button>
-                  <button className="btn btn-outline" onClick={() => setProof({ taskId: "", step: "idle" })}>إلغاء</button>
+              </div>
+              <div className={`dpwa-gps-badge ${gpsPos ? "dpwa-gps-on" : "dpwa-gps-off"}`}>
+                {gpsPos ? "● GPS نشط" : "○ GPS مُعطَّل"}
+              </div>
+            </div>
+            <div className="dpwa-list-stats">
+              <div className="dpwa-stat"><span className="dpwa-stat-val">{pendingTasks.length}</span><span className="dpwa-stat-lbl">معلقة</span></div>
+              <div className="dpwa-stat-divider" />
+              <div className="dpwa-stat"><span className="dpwa-stat-val">{tasks.filter(t => t.status === "in_progress").length}</span><span className="dpwa-stat-lbl">جارية</span></div>
+              <div className="dpwa-stat-divider" />
+              <div className="dpwa-stat"><span className="dpwa-stat-val">{(deliveredLiters / 1000).toFixed(0)}K</span><span className="dpwa-stat-lbl">لتر سُلِّم</span></div>
+              {offlineCount > 0 && (
+                <><div className="dpwa-stat-divider" />
+                <div className="dpwa-stat"><span className="dpwa-stat-val dpwa-stat-warn">{offlineCount}</span><span className="dpwa-stat-lbl">مزامنة</span></div></>
+              )}
+            </div>
+          </div>
+
+          {inProgressTask && (
+            <button className="dpwa-resume-card" onClick={() => { setActiveTask(inProgressTask); activeTaskRef.current = inProgressTask; setStage("navigate"); startGps(); }}>
+              <div className="dpwa-resume-pulse-ring" />
+              <div className="dpwa-resume-info">
+                <div className="dpwa-resume-title">⚡ مهمة جارية — اضغط للاستكمال</div>
+                <div className="dpwa-resume-sub">
+                  {zones.find(z => z.id === inProgressTask.zoneId)?.name} · {Number(inProgressTask.quantityLiters).toLocaleString()} لتر
                 </div>
-              </>
-            )}
-            {proof.step === "done" && (
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}></div>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>جارٍ رفع الدليل...</div>
-                <div className="uploading-bar"><div className="uploading-fill" /></div>
+              </div>
+              <div className="dpwa-resume-arrow">←</div>
+            </button>
+          )}
+
+          <div className="dpwa-list-tasks">
+            {pendingTasks.length === 0 && !inProgressTask && (
+              <div className="dpwa-empty-state">
+                <div className="dpwa-empty-icon">🚛</div>
+                <div className="dpwa-empty-title">لا توجد مهام معلقة</div>
+                <div className="dpwa-empty-sub">ستظهر هنا عند تعيين مهام توزيع جديدة لك</div>
               </div>
             )}
+            {pendingTasks.map(task => {
+              const z = zones.find(zn => zn.id === task.zoneId);
+              return (
+                <button key={task.id} className="dpwa-task-card" onClick={() => acceptTask(task)}>
+                  <div className="dpwa-task-notif-dot" />
+                  <div className="dpwa-task-info">
+                    <div className="dpwa-task-zone">{z?.name ?? task.zoneId}</div>
+                    <div className="dpwa-task-meta">
+                      <span>🚰 {Number(task.quantityLiters).toLocaleString()} لتر</span>
+                      <span>📅 {new Date(task.scheduledAt).toLocaleDateString("ar-SY", { weekday: "short", month: "short", day: "numeric" })}</span>
+                      {z && <span>👥 {(z.populationEstimate ?? 0).toLocaleString()}</span>}
+                    </div>
+                  </div>
+                  <div className="dpwa-task-chevron">←</div>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
 
-      <div className="portal-header" style={{ background: "linear-gradient(135deg,#0284c7,#0ea5e9)" }}>
-        <div className="portal-header-inner">
-          <div className="portal-role-badge"> السائق</div>
-          <h2 className="portal-title">Bilal Yusuf</h2>
-          <p className="portal-subtitle">Water Tanker 5000L · سائق تابع</p>
-        </div>
-        <div className="portal-header-stats">
-          <div className="ph-stat"><span className="ph-val">{tasks.filter(t => t.status === "pending").length}</span><span className="ph-lbl">مهام معلقة</span></div>
-          <div className="ph-divider" />
-          <div className="ph-stat"><span className="ph-val">{tasks.filter(t => t.status === "in_progress").length}</span><span className="ph-lbl">جارية</span></div>
-          <div className="ph-divider" />
-          <div className="ph-stat"><span className="ph-val">{(totalDelivered / 1000).toFixed(1)}k</span><span className="ph-lbl">لتر سُلِّم</span></div>
-        </div>
-      </div>
+      {/* ── ACTIVE STAGES — FULL SCREEN OVERLAY ─────────────────── */}
+      {stage !== "list" && (
+        <div className="dpwa-overlay" dir="rtl">
 
-      <div className="portal-body">
+          {/* ── ACCEPT STAGE ─────────────────────────────────────── */}
+          {stage === "accept" && activeTask && (
+            <div className="dpwa-screen">
+              <div className="dpwa-top-bar">
+                <button className="dpwa-back-btn" onClick={backToList}>✕</button>
+                <span className="dpwa-top-label">مهمة جديدة</span>
+                <div style={{ width: 36 }} />
+              </div>
 
-        {/* Active Task Alert */}
-        {inProgressTask && (
-          <div className="active-task-alert">
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ fontSize: 32 }}></div>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 16, color: "#12384f" }}>مهمة جارية الآن</div>
-                <div style={{ fontSize: 13, color: "#6b8aa0" }}>
-                  {zones.find(z => z.id === inProgressTask.zoneId)?.name} · {Number(inProgressTask.quantityLiters).toLocaleString()} لتر
+              <div className="dpwa-accept-body">
+                <div className="dpwa-alert-glyph">🚛</div>
+                <div className="dpwa-alert-title">مهمة توزيع جديدة!</div>
+                <div className="dpwa-alert-sub">تم تعيين هذه المهمة من قِبل المزود المسؤول</div>
+
+                <div className="dpwa-details-card">
+                  <div className="dpwa-detail-row">
+                    <span className="dpwa-detail-icon">📍</span>
+                    <div><div className="dpwa-detail-lbl">المنطقة</div><div className="dpwa-detail-val">{activeZone?.name ?? activeTask.zoneId}</div></div>
+                  </div>
+                  <div className="dpwa-detail-row">
+                    <span className="dpwa-detail-icon">🚰</span>
+                    <div><div className="dpwa-detail-lbl">الحصة المطلوبة</div><div className="dpwa-detail-val">{Number(activeTask.quantityLiters).toLocaleString()} لتر للتفريغ في نقطة التوزيع العامة</div></div>
+                  </div>
+                  <div className="dpwa-detail-row">
+                    <span className="dpwa-detail-icon">📅</span>
+                    <div><div className="dpwa-detail-lbl">الموعد</div><div className="dpwa-detail-val">{new Date(activeTask.scheduledAt).toLocaleDateString("ar-SY", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</div></div>
+                  </div>
+                  {activeZone && (
+                    <div className="dpwa-detail-row">
+                      <span className="dpwa-detail-icon">👥</span>
+                      <div><div className="dpwa-detail-lbl">السكان المستفيدون</div><div className="dpwa-detail-val">{(activeZone.populationEstimate ?? 0).toLocaleString()} شخص</div></div>
+                    </div>
+                  )}
+                  {activeTask.notes && (
+                    <div className="dpwa-detail-row">
+                      <span className="dpwa-detail-icon">📝</span>
+                      <div><div className="dpwa-detail-lbl">ملاحظات</div><div className="dpwa-detail-val">{activeTask.notes}</div></div>
+                    </div>
+                  )}
                 </div>
-                <div style={{ fontSize: 12, color: "#0ea5e9", marginTop: 2 }}> GPS نشط · يتم تتبع موقعك في الوقت الحقيقي</div>
+              </div>
+
+              <div className="dpwa-action-zone">
+                <button className="dpwa-btn dpwa-btn-accept" onClick={() => setStage("route")}>
+                  ✓ قبول المهمة والبدء
+                </button>
               </div>
             </div>
-            <button className="btn btn-proof" onClick={() => startProof(inProgressTask.id)}>
-               تسليم + دليل
-            </button>
-          </div>
-        )}
+          )}
 
-        {/* Task lifecycle explanation */}
-        <div className="lifecycle-bar">
-          {[{ s: "pending", l: "مجدولة" }, { s: "in_progress", l: "جارية" }, { s: "delivered", l: "مُنجزة" }].map((step, i, arr) => (
-            <div key={step.s} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <div className={`lc-step ${inProgressTask?.status === step.s || (!inProgressTask && step.s === "delivered") ? "lc-active" : ""}`}>
-                <div className="lc-dot" style={{ background: STATUS_COLORS[step.s] }} />
-                <span>{step.l}</span>
+          {/* ── ROUTE STAGE ──────────────────────────────────────── */}
+          {stage === "route" && activeTask && (
+            <div className="dpwa-screen">
+              <div className="dpwa-top-bar">
+                <button className="dpwa-back-btn" onClick={() => setStage("accept")}>←</button>
+                <span className="dpwa-top-label">المرحلة 2 من 5</span>
+                <div style={{ width: 36 }} />
               </div>
-              {i < arr.length - 1 && <div className="lc-arrow">←</div>}
-            </div>
-          ))}
-        </div>
 
-        {/* Filters */}
-        <div className="task-filters">
-          {(["all", "pending", "in_progress", "delivered"] as const).map(f => (
-            <button key={f} className={`filter-pill ${filter === f ? "filter-pill-active" : ""}`} onClick={() => setFilter(f)}>
-              {f === "all" ? "الكل" : STATUS_LABELS[f]}
-              <span className="filter-count">{f === "all" ? tasks.filter(t => t.status !== "cancelled").length : tasks.filter(t => t.status === f).length}</span>
-            </button>
-          ))}
-        </div>
+              <div className="dpwa-route-body">
+                <div className="dpwa-route-glyph">🏭</div>
+                <div className="dpwa-route-title">تعبئة الشاحنة والانطلاق</div>
+                <div className="dpwa-route-sub">عند انطلاقك من المستودع، اضغط الزر أدناه لتفعيل تتبع موقعك حياً</div>
 
-        {/* Tasks */}
-        <div className="driver-tasks">
-          {filtered.map(t => {
-            const zone = zones.find(z => z.id === t.zoneId);
-            const color = STATUS_COLORS[t.status] ?? "#8eb5c8";
-            const isActive = t.status === "in_progress";
-            const isPending = t.status === "pending";
-            return (
-              <div key={t.id} className={`driver-task-card ${isActive ? "driver-task-active" : ""}`}>
-                <div className="driver-task-header">
-                  <div className="driver-task-zone"> {zone?.name ?? t.zoneId}</div>
-                  <div className="driver-task-status" style={{ background: color + "18", color }}>
-                    {STATUS_LABELS[t.status]}
+                <div className="dpwa-route-summary">
+                  <div className="dpwa-route-summary-item"><span>📍</span><span>{activeZone?.name ?? activeTask.zoneId}</span></div>
+                  <div className="dpwa-route-summary-item"><span>🚰</span><span>{Number(activeTask.quantityLiters).toLocaleString()} لتر</span></div>
+                </div>
+
+                <div className="dpwa-gps-note">
+                  <div className="dpwa-gps-note-icon">📡</div>
+                  <div>
+                    <div className="dpwa-gps-note-title">تتبع حي مستمر</div>
+                    <div className="dpwa-gps-note-sub">سيتم إرسال إحداثياتك كل 10 ثوانٍ تلقائياً لتحديث خريطة المنظمة والمزود في الوقت الحقيقي</div>
                   </div>
                 </div>
-                <div className="driver-task-details">
-                  <div className="driver-task-detail"><span> الكمية</span><strong>{Number(t.quantityLiters).toLocaleString()} لتر</strong></div>
-                  <div className="driver-task-detail"><span> الموعد</span><strong>{new Date(t.scheduledAt).toLocaleDateString("ar-SY")}</strong></div>
-                  {zone && <div className="driver-task-detail"><span> السكان</span><strong>{(zone.populationEstimate ?? 0).toLocaleString()}</strong></div>}
-                  {t.notes && <div className="driver-task-detail"><span> ملاحظات</span><strong>{t.notes}</strong></div>}
+              </div>
+
+              <div className="dpwa-action-zone">
+                <button className="dpwa-btn dpwa-btn-start" onClick={startRoute}>
+                  🚛 بدء التحرك للشحن والتوزيع
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── NAVIGATE STAGE ───────────────────────────────────── */}
+          {stage === "navigate" && activeTask && (
+            <div className="dpwa-screen dpwa-screen-map">
+              <div className="dpwa-map-topbar">
+                <div>
+                  <div className="dpwa-map-zone">{activeZone?.name ?? activeTask.zoneId}</div>
+                  <div className="dpwa-map-qty">🚰 {Number(activeTask.quantityLiters).toLocaleString()} لتر للتفريغ</div>
                 </div>
-                <div className="driver-task-footer">
-                  {isPending && <button className="btn btn-start" onClick={() => startTask(t.id)}> بدء التوصيل</button>}
-                  {isActive && <button className="btn btn-proof" onClick={() => startProof(t.id)}> تسليم + التقاط دليل</button>}
-                  {t.status === "delivered" && <div className="delivered-badge"> مُنجزة — الدليل مرفوع</div>}
+                <div className={`dpwa-gps-badge ${gpsPos ? "dpwa-gps-on" : "dpwa-gps-off"}`}>
+                  {gpsPos ? "● GPS نشط" : "⟳ تحديد الموقع..."}
                 </div>
               </div>
-            );
-          })}
-          {filtered.length === 0 && <div className="empty-state">لا توجد مهام في هذه الفئة</div>}
+
+              <div ref={mapDivRef} className="dpwa-map-canvas" />
+
+              <div className="dpwa-map-footer">
+                <button className="dpwa-btn dpwa-btn-arrive" onClick={() => setStage("proof")}>
+                  📍 وصلنا الموقع — بدء التفريغ
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── PROOF STAGE ──────────────────────────────────────── */}
+          {stage === "proof" && activeTask && (
+            <div className="dpwa-screen">
+              <div className="dpwa-top-bar">
+                <div style={{ width: 36 }} />
+                <span className="dpwa-top-label">توثيق التسليم — مطلوب</span>
+                <div style={{ width: 36 }} />
+              </div>
+
+              <div className="dpwa-proof-body">
+                <div className="dpwa-proof-title">إثبات التسليم إلزامي</div>
+                <div className="dpwa-proof-subtitle">التقط صورة لعداد الشاحنة أو نقطة التوزيع السكنية</div>
+
+                {!proofPreview ? (
+                  <label className="dpwa-camera-label">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleProofFile}
+                      style={{ display: "none" }}
+                    />
+                    <div className="dpwa-camera-frame">
+                      <div className="dpwa-cam-corner dpwa-c-tl" />
+                      <div className="dpwa-cam-corner dpwa-c-tr" />
+                      <div className="dpwa-cam-corner dpwa-c-bl" />
+                      <div className="dpwa-cam-corner dpwa-c-br" />
+                      <div className="dpwa-camera-inner">
+                        <div className="dpwa-camera-glyph">📷</div>
+                        <div className="dpwa-camera-hint">اضغط لفتح الكاميرا</div>
+                        {gpsPos && (
+                          <div className="dpwa-gps-pill">
+                            📡 {gpsPos.lat.toFixed(4)}°N · {gpsPos.lng.toFixed(4)}°E
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </label>
+                ) : (
+                  <div className="dpwa-proof-preview">
+                    <img src={proofPreview} alt="دليل التسليم" />
+                    <div className="dpwa-proof-geo-tag">
+                      <div>🕐 {new Date().toLocaleTimeString("ar-SY")}</div>
+                      {gpsPos && <div>📡 {gpsPos.lat.toFixed(4)}°N · {gpsPos.lng.toFixed(4)}°E</div>}
+                      <div>✅ موثَّق جغرافياً</div>
+                    </div>
+                    <button className="dpwa-retake-btn" onClick={() => { setProofFile(null); setProofPreview(null); }}>
+                      ↺ إعادة الالتقاط
+                    </button>
+                  </div>
+                )}
+
+                <div className="dpwa-security-note">
+                  🔒 تُدمج الصورة مع الطابع الزمني والإحداثيات الجغرافية تلقائياً لمنع التلاعب
+                </div>
+              </div>
+
+              <div className="dpwa-action-zone">
+                <button
+                  className={`dpwa-btn dpwa-btn-complete ${!proofFile ? "dpwa-btn-dim" : ""}`}
+                  onClick={submitProof}
+                  disabled={!proofFile || completing}
+                >
+                  {completing ? "⟳ جارٍ الحفظ والرفع..." : "✓ إغلاق المهمة بنجاح"}
+                </button>
+                {!proofFile && <div className="dpwa-proof-required-note">الصورة مطلوبة قبل إغلاق المهمة</div>}
+              </div>
+            </div>
+          )}
+
+          {/* ── COMPLETE STAGE ───────────────────────────────────── */}
+          {stage === "complete" && activeTask && (
+            <div className="dpwa-screen dpwa-screen-done">
+              <div className="dpwa-done-body">
+                <div className="dpwa-done-icon">✅</div>
+                <div className="dpwa-done-title">تم إغلاق المهمة بنجاح!</div>
+                <div className="dpwa-done-sub">
+                  {activeZone?.name ?? activeTask.zoneId} · {Number(activeTask.quantityLiters).toLocaleString()} لتر
+                </div>
+
+                {isOnline ? (
+                  <div className="dpwa-sync-pill dpwa-sync-online">
+                    <span>✓</span>
+                    <span>تمت مزامنة البيانات فوراً مع السيرفر</span>
+                  </div>
+                ) : (
+                  <div className="dpwa-sync-pill dpwa-sync-offline">
+                    <span>💾</span>
+                    <div>
+                      <div>تم حفظ الإثبات محلياً بأمان</div>
+                      <div className="dpwa-sync-sub">سيتم الرفع تلقائياً فور توفر التغطية</div>
+                    </div>
+                  </div>
+                )}
+
+                {offlineCount > 0 && (
+                  <div className="dpwa-offline-count">
+                    📶 {offlineCount} مهمة بانتظار المزامنة عند توفر الإنترنت
+                  </div>
+                )}
+              </div>
+
+              <div className="dpwa-action-zone">
+                <button className="dpwa-btn dpwa-btn-next" onClick={backToList}>
+                  → الانتقال للمهمة التالية
+                </button>
+              </div>
+            </div>
+          )}
+
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }
