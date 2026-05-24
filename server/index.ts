@@ -1078,15 +1078,31 @@ app.get("/api/provider-drivers", async (req, res) => {
 
 app.post("/api/provider-driver-invites", async (req, res) => {
   try {
-    const { fullName, phone, zone, idNumber, providerId, providerName } = req.body;
-    if (!fullName || !phone || !providerId) return res.status(400).json({ error: "fullName, phone, providerId required" });
+    const {
+      fullName, email, phone, zone, idNumber,
+      plateNumber, vehicleModel, capacityLiters, vehicleYear, vehicleNotes,
+      providerId, providerName,
+    } = req.body;
+    if (!fullName || !email || !providerId) return res.status(400).json({ error: "fullName, email, providerId required" });
 
     const { randomBytes } = await import("node:crypto");
     const token = randomBytes(32).toString("hex");
 
     const [invite] = await db.insert(providerDriverInvitesTable).values({
-      fullName, phone, zone: zone || null, idNumber: idNumber || null,
-      providerId, providerName: providerName || null, token, status: "pending",
+      fullName,
+      email,
+      phone: phone || null,
+      zone: zone || null,
+      idNumber: idNumber || null,
+      plateNumber: plateNumber || null,
+      vehicleModel: vehicleModel || null,
+      capacityLiters: capacityLiters ? Number(capacityLiters) : null,
+      vehicleYear: vehicleYear ? Number(vehicleYear) : null,
+      vehicleNotes: vehicleNotes || null,
+      providerId,
+      providerName: providerName || null,
+      token,
+      status: "pending",
     }).returning();
 
     res.status(201).json({ ...invite, inviteLink: `${req.headers.origin ?? "https://app.qatra.ps"}/driver-invite?token=${token}` });

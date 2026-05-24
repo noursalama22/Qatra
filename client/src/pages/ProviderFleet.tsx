@@ -5,8 +5,12 @@ type DriverStatus = "active" | "invited" | "suspended";
 type DriverEntry = {
   id: string;
   fullName: string;
-  phone: string;
-  zone: string;
+  email: string;
+  phone: string | null;
+  zone: string | null;
+  plateNumber: string | null;
+  vehicleModel: string | null;
+  capacityLiters: number | null;
   status: DriverStatus;
   lastActivityAt: string | null;
   source: "driver" | "invite";
@@ -26,7 +30,7 @@ const DRIVER_STATUS: Record<DriverStatus, { label: string; bg: string; color: st
 
 type InviteResult = {
   fullName: string;
-  phone: string;
+  email: string;
   token: string;
   inviteLink: string;
 };
@@ -34,6 +38,12 @@ type InviteResult = {
 function fmtDate(d: string | null) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("ar-AE", { day: "2-digit", month: "long", year: "numeric" });
+}
+
+function fmtCapacity(liters: number | null) {
+  if (!liters) return "—";
+  if (liters >= 1000) return `${(liters / 1000).toFixed(0)}K لتر`;
+  return `${liters} لتر`;
 }
 
 // ── Invite Driver Modal ─────────────────────────────────────────────────────
@@ -47,71 +57,129 @@ function InviteDriverModal({ onClose, onSent }: { onClose: () => void; onSent: (
     "رفح", "تل السلطان", "البرازيل",
   ];
 
-  const [form, setForm] = useState({ fullName: "", phone: "", zone: "", idNumber: "" });
+  const [form, setForm] = useState({
+    fullName: "", email: "", phone: "", idNumber: "", zone: "",
+    plateNumber: "", vehicleModel: "", capacityLiters: "", vehicleYear: "", vehicleNotes: "",
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const set = (key: string, value: string) => setForm(p => ({ ...p, [key]: value }));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.fullName.trim()) { setError("الاسم الكامل مطلوب"); return; }
-    if (!form.phone.trim()) { setError("رقم الهاتف مطلوب"); return; }
+    if (!form.email.trim()) { setError("البريد الإلكتروني مطلوب"); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) { setError("البريد الإلكتروني غير صالح"); return; }
     setSaving(true); setError(null);
     try {
       const res = await fetch("/api/provider-driver-invites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fullName: form.fullName, phone: form.phone,
-          zone: form.zone || null, idNumber: form.idNumber || null,
-          providerId: DEMO_PROVIDER_ID, providerName: DEMO_PROVIDER_NAME,
+          fullName: form.fullName.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim() || null,
+          idNumber: form.idNumber.trim() || null,
+          zone: form.zone || null,
+          plateNumber: form.plateNumber.trim() || null,
+          vehicleModel: form.vehicleModel.trim() || null,
+          capacityLiters: form.capacityLiters ? Number(form.capacityLiters) : null,
+          vehicleYear: form.vehicleYear ? Number(form.vehicleYear) : null,
+          vehicleNotes: form.vehicleNotes.trim() || null,
+          providerId: DEMO_PROVIDER_ID,
+          providerName: DEMO_PROVIDER_NAME,
         }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
       const data = await res.json();
-      onSent({ fullName: data.fullName, phone: data.phone, token: data.token, inviteLink: data.inviteLink });
+      onSent({ fullName: data.fullName, email: data.email, token: data.token, inviteLink: data.inviteLink });
       onClose();
     } catch (e) { setError(e instanceof Error ? e.message : "خطأ غير متوقع"); }
     finally { setSaving(false); }
   };
 
+  const inputStyle = {
+    width: "100%", padding: "10px 12px", border: "1px solid #d8eef8",
+    borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none",
+    direction: "rtl" as const, background: "#fafcff", boxSizing: "border-box" as const,
+  };
+  const labelStyle = {
+    display: "block" as const, fontSize: 11, fontWeight: 700, color: "#6b8aa0",
+    marginBottom: 5, textTransform: "uppercase" as const, letterSpacing: 0.4,
+  };
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(3px)" }} onClick={onClose}>
-      <form style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 460, padding: "28px 28px 24px", display: "flex", flexDirection: "column", gap: 14 }} onClick={e => e.stopPropagation()} onSubmit={submit}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(3px)", padding: "20px" }} onClick={onClose}>
+      <form style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 520, padding: "28px 28px 24px", display: "flex", flexDirection: "column", gap: 16, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()} onSubmit={submit}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <div>
-            <h3 style={{ fontSize: 17, fontWeight: 800, color: "#12384f", margin: "0 0 2px" }}>دعوة سائق جديد</h3>
-            <p style={{ fontSize: 12, color: "#6b8aa0", margin: 0 }}>سيصله رابط لقبول الانضمام وتفعيل حسابه.</p>
+            <h3 style={{ fontSize: 17, fontWeight: 800, color: "#12384f", margin: "0 0 3px" }}>دعوة سائق جديد</h3>
+            <p style={{ fontSize: 12, color: "#6b8aa0", margin: 0 }}>سيصله رابط الدعوة على بريده الإلكتروني لإتمام إنشاء حسابه.</p>
           </div>
-          <button type="button" onClick={onClose} style={{ background: "#f0f9ff", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", fontSize: 16, color: "#6b8aa0", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+          <button type="button" onClick={onClose} style={{ background: "#f0f9ff", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", fontSize: 16, color: "#6b8aa0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>×</button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {[
-            { label: "الاسم الكامل *", key: "fullName", placeholder: "مثال: محمد أحمد", full: true },
-            { label: "رقم الهاتف *",   key: "phone",    placeholder: "مثال: +970-599-000-000" },
-            { label: "رقم الهوية (اختياري)", key: "idNumber", placeholder: "رقم الهوية الوطنية" },
-          ].map(f => (
-            <div key={f.key} style={f.full ? { gridColumn: "1 / -1" } : {}}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b8aa0", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.4 }}>{f.label}</label>
-              <input
-                value={(form as any)[f.key]}
-                onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                placeholder={f.placeholder}
-                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d8eef8", borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none", direction: "rtl", background: "#fafcff" }}
-              />
+        {/* Section: Driver Info */}
+        <div style={{ background: "#f8fcff", border: "1px solid #e0f0fa", borderRadius: 12, padding: "16px" }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: "#0284c7", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+            👤 بيانات السائق
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>الاسم الكامل *</label>
+              <input value={form.fullName} onChange={e => set("fullName", e.target.value)} placeholder="مثال: محمد أحمد الشريف" style={inputStyle} />
             </div>
-          ))}
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>البريد الإلكتروني * (لإرسال الدعوة)</label>
+              <input type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="مثال: driver@example.com" style={{ ...inputStyle, direction: "ltr" }} />
+            </div>
+            <div>
+              <label style={labelStyle}>رقم الهاتف (اختياري)</label>
+              <input value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+970-599-000-000" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>رقم الهوية (اختياري)</label>
+              <input value={form.idNumber} onChange={e => set("idNumber", e.target.value)} placeholder="رقم الهوية الوطنية" style={inputStyle} />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>المنطقة (اختياري)</label>
+              <select value={form.zone} onChange={e => set("zone", e.target.value)} style={{ ...inputStyle, color: form.zone ? "#12384f" : "#8eb5c8" }}>
+                <option value="">اختر المنطقة...</option>
+                {GAZA_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
 
-          <div>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b8aa0", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.4 }}>المنطقة</label>
-            <select
-              value={form.zone}
-              onChange={e => setForm(p => ({ ...p, zone: e.target.value }))}
-              style={{ width: "100%", padding: "10px 12px", border: "1px solid #d8eef8", borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none", direction: "rtl", background: "#fafcff", color: form.zone ? "#12384f" : "#8eb5c8" }}
-            >
-              <option value="">اختر المنطقة...</option>
-              {GAZA_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
-            </select>
+        {/* Section: Vehicle Info */}
+        <div style={{ background: "#f8fcff", border: "1px solid #e0f0fa", borderRadius: 12, padding: "16px" }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: "#0284c7", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+            🚛 بيانات الشاحنة
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={labelStyle}>رقم اللوحة</label>
+              <input value={form.plateNumber} onChange={e => set("plateNumber", e.target.value)} placeholder="مثال: د-44291" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>موديل الشاحنة</label>
+              <input value={form.vehicleModel} onChange={e => set("vehicleModel", e.target.value)} placeholder="مثال: ميتسوبيشي كانتر" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>السعة (لتر)</label>
+              <input type="number" min="0" value={form.capacityLiters} onChange={e => set("capacityLiters", e.target.value)} placeholder="مثال: 10000" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>سنة الصنع</label>
+              <input type="number" min="1990" max="2030" value={form.vehicleYear} onChange={e => set("vehicleYear", e.target.value)} placeholder="مثال: 2020" style={inputStyle} />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>ملاحظات الشاحنة (اختياري)</label>
+              <input value={form.vehicleNotes} onChange={e => set("vehicleNotes", e.target.value)} placeholder="أي تفاصيل إضافية..." style={inputStyle} />
+            </div>
           </div>
         </div>
 
@@ -119,7 +187,7 @@ function InviteDriverModal({ onClose, onSent }: { onClose: () => void; onSent: (
 
         <div style={{ display: "flex", gap: 10 }}>
           <button type="button" onClick={onClose} style={{ flex: 1, padding: "11px 0", borderRadius: 10, background: "white", color: "#6b8aa0", border: "1px solid #d8eef8", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>إلغاء</button>
-          <button type="submit" disabled={saving} style={{ flex: 2, padding: "11px 0", borderRadius: 10, background: "linear-gradient(135deg,#0284c7,#0ea5e9)", color: "white", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          <button type="submit" disabled={saving} style={{ flex: 2, padding: "11px 0", borderRadius: 10, background: "linear-gradient(135deg,#0284c7,#0ea5e9)", color: "white", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.7 : 1 }}>
             {saving ? "جارٍ الإرسال..." : "إرسال الدعوة 📤"}
           </button>
         </div>
@@ -140,10 +208,12 @@ function InviteSuccessModal({ result, onClose }: { result: InviteResult; onClose
         <div style={{ width: 60, height: 60, borderRadius: "50%", background: "linear-gradient(135deg, #0284c7, #0ea5e9)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", fontSize: 26 }}>✅</div>
         <div>
           <h3 style={{ fontSize: 18, fontWeight: 800, color: "#12384f", margin: "0 0 4px" }}>تم إرسال الدعوة بنجاح!</h3>
-          <p style={{ fontSize: 13, color: "#6b8aa0", margin: 0 }}>تمت دعوة <strong>{result.fullName}</strong> على الرقم <strong>{result.phone}</strong></p>
+          <p style={{ fontSize: 13, color: "#6b8aa0", margin: 0 }}>
+            تمت دعوة <strong>{result.fullName}</strong> على البريد الإلكتروني <strong style={{ direction: "ltr", display: "inline-block" }}>{result.email}</strong>
+          </p>
         </div>
         <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "14px 16px" }}>
-          <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, marginBottom: 6, textAlign: "right" }}>رابط القبول</div>
+          <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, marginBottom: 6, textAlign: "right" }}>رابط قبول الدعوة</div>
           <div style={{ fontSize: 11, color: "#12384f", wordBreak: "break-all", direction: "ltr", textAlign: "left", lineHeight: 1.5, marginBottom: 10, background: "white", padding: "8px 10px", borderRadius: 7, border: "1px solid #d8eef8" }}>{result.inviteLink}</div>
           <button onClick={copy} style={{ width: "100%", padding: "8px 0", borderRadius: 8, background: copied ? "#ecfeff" : "#0ea5e9", color: copied ? "#0891b2" : "white", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
             {copied ? "✅ تم النسخ!" : "📋 نسخ الرابط"}
@@ -179,7 +249,7 @@ export default function ProviderFleet() {
   const handleDriverAction = async (driver: DriverEntry, action: "resend" | "activate" | "suspend") => {
     if (action === "resend" && driver.token) {
       const link = `${window.location.origin}/driver-invite?token=${driver.token}`;
-      setInviteResult({ fullName: driver.fullName, phone: driver.phone, token: driver.token, inviteLink: link });
+      setInviteResult({ fullName: driver.fullName, email: driver.email, token: driver.token, inviteLink: link });
       return;
     }
     const newStatus = action === "activate" ? "accepted" : "expired";
@@ -191,7 +261,7 @@ export default function ProviderFleet() {
     await loadDrivers();
   };
 
-  const zones = [...new Set(drivers.map(d => d.zone).filter(z => z && z !== "غير محدد"))];
+  const zones = [...new Set(drivers.map(d => d.zone).filter((z): z is string => !!z && z !== "غير محدد"))];
 
   const activeCount    = drivers.filter(d => d.status === "active").length;
   const invitedCount   = drivers.filter(d => d.status === "invited").length;
@@ -199,7 +269,7 @@ export default function ProviderFleet() {
 
   const filtered = drivers.filter(d => {
     const q = search.toLowerCase();
-    const matchSearch = !q || d.fullName.toLowerCase().includes(q) || d.phone.includes(q);
+    const matchSearch = !q || d.fullName.toLowerCase().includes(q) || (d.email ?? "").toLowerCase().includes(q) || (d.phone ?? "").includes(q);
     const matchStatus = statusFilter === "all" || d.status === statusFilter;
     const matchZone   = zoneFilter === "all" || d.zone === zoneFilter;
     return matchSearch && matchStatus && matchZone;
@@ -212,7 +282,7 @@ export default function ProviderFleet() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 14 }}>
         <div>
           <h2 style={{ fontSize: 24, fontWeight: 800, color: "#12384f", marginBottom: 4 }}>إدارة السائقين</h2>
-          <p style={{ fontSize: 13, color: "#6b8aa0" }}>ادعُ السائقين وأدر حساباتهم وتابع حالتهم الميدانية.</p>
+          <p style={{ fontSize: 13, color: "#6b8aa0" }}>ادعُ السائقين عبر البريد الإلكتروني — بيانات الشاحنة تُدرج ضمن ملف كل سائق.</p>
         </div>
         <button
           onClick={() => setInviteOpen(true)}
@@ -246,7 +316,7 @@ export default function ProviderFleet() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="ابحث بالاسم أو رقم الهاتف..."
+            placeholder="ابحث بالاسم أو البريد الإلكتروني..."
             style={{ width: "100%", padding: "9px 34px 9px 12px", border: "1px solid #d8eef8", borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none", direction: "rtl", background: "#fafcff" }}
           />
         </div>
@@ -310,10 +380,10 @@ export default function ProviderFleet() {
                       </div>
                       <div>
                         <div style={{ fontSize: 15, fontWeight: 700, color: "#12384f" }}>{driver.fullName}</div>
-                        <div style={{ fontSize: 12, color: "#8eb5c8", marginTop: 2 }}>📞 {driver.phone}</div>
+                        <div style={{ fontSize: 11, color: "#8eb5c8", marginTop: 2, direction: "ltr", textAlign: "right" }}>✉️ {driver.email || "—"}</div>
                       </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 5, background: st.bg, border: `1px solid ${st.dot}30`, borderRadius: 20, padding: "5px 11px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, background: st.bg, border: `1px solid ${st.dot}30`, borderRadius: 20, padding: "5px 11px", flexShrink: 0 }}>
                       <div style={{ width: 6, height: 6, borderRadius: "50%", background: st.dot }} />
                       <span style={{ fontSize: 11, fontWeight: 700, color: st.color }}>{st.label}</span>
                     </div>
@@ -323,8 +393,17 @@ export default function ProviderFleet() {
                 {/* Card Body */}
                 <div style={{ padding: "12px 18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flex: 1 }}>
                   <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 4 }}>🚛 الشاحنة</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{driver.plateNumber || "—"}</div>
+                    {driver.vehicleModel && <div style={{ fontSize: 11, color: "#6b8aa0", marginTop: 2 }}>{driver.vehicleModel}</div>}
+                  </div>
+                  <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 4 }}>💧 السعة</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{fmtCapacity(driver.capacityLiters)}</div>
+                  </div>
+                  <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "10px 12px" }}>
                     <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 4 }}>📍 المنطقة</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{driver.zone}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{driver.zone || "—"}</div>
                   </div>
                   <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "10px 12px" }}>
                     <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 4 }}>🕐 آخر نشاط</div>
