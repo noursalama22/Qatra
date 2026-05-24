@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import "leaflet/dist/leaflet.css";
 import type { Map as LeafletMap, LayerGroup } from "leaflet";
+import NgoContractsTab from "../components/ngo/NgoContractsTab";
+import NgoReportsTab from "../components/ngo/NgoReportsTab";
+import type { NgoSection } from "../ngoNav";
 
 const MY_NGO_ID = "seed-n1";
 
@@ -44,6 +47,7 @@ const PIPELINE_STEPS = [
 const MOCK_DRIVERS = ["أحمد — شاحنة 4022", "محمود — شاحنة 1887", "خالد — شاحنة 3301", "يوسف — شاحنة 2044"];
 
 function dayKey(d: Date): string { return d.toISOString().slice(0, 10); }
+
 function getNextDays(n: number): Date[] {
   return Array.from({ length: n }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() + i); d.setHours(0, 0, 0, 0); return d;
@@ -85,8 +89,9 @@ function getSlotTask(tasks: Task[], zoneId: string, dayStr: string, slotH: numbe
   });
 }
 
-export default function NgoPortal() {
-  const [tab, setTab] = useState<"dashboard" | "pipeline" | "verify">("dashboard");
+type Props = { section: NgoSection };
+
+export default function NgoPortal({ section: tab }: Props) {
   const [zones, setZones] = useState<Zone[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -258,10 +263,9 @@ export default function NgoPortal() {
     <div className="portal ngo-portal" dir="rtl">
       {toast && <div className="action-toast">{toast}</div>}
 
-      {/* ── Header ─────────────────────────────────────────────── */}
       <div className="ngo-header">
         <div className="ngo-header-left">
-          <div className="portal-role-badge"> المنظمة الإنسانية</div>
+          <div className="portal-role-badge">المنظمة الإنسانية</div>
           <h2 className="portal-title">برنامج WASH غزة</h2>
           <p className="portal-subtitle">جدولة التوزيع · منع التضارب · ضمان العدالة</p>
         </div>
@@ -283,23 +287,6 @@ export default function NgoPortal() {
         </div>
       </div>
 
-      {/* ── Tabs ──────────────────────────────────────────────── */}
-      <div className="portal-tabs">
-        <button className={`ptab ${tab === "dashboard" ? "ptab-active" : ""}`} onClick={() => setTab("dashboard")}>
-           جدولة التوزيع
-        </button>
-        <button className={`ptab ${tab === "pipeline" ? "ptab-active" : ""}`} onClick={() => setTab("pipeline")}>
-           المسار النشط {activeTasks.length > 0 && <span className="tab-badge">{activeTasks.length}</span>}
-        </button>
-        <button className={`ptab ${tab === "verify" ? "ptab-active" : ""}`} onClick={() => setTab("verify")}>
-           التوثيق {deliveredTasks.length > 0 && <span className="tab-badge tab-badge-green">{deliveredTasks.length}</span>}
-        </button>
-      </div>
-
-      {/* ════════════════════════════════════════
-          TAB 1 · SCHEDULE DASHBOARD
-          Left: weekly calendar  |  Right: map
-      ════════════════════════════════════════ */}
       {tab === "dashboard" && (
         <div className="ngo-sched-split">
 
@@ -541,6 +528,11 @@ export default function NgoPortal() {
           }
         </div>
       )}
+
+      {tab === "contracts" && <NgoContractsTab onToast={showToast} />}
+
+      {tab === "reports" && <NgoReportsTab onToast={showToast} />}
+
 
       {/* ════════════════════════════════════════
           SCHEDULING DRAWER

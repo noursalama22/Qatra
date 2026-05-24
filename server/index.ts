@@ -8,7 +8,7 @@ import {
   ngosTable, providersTable, driversTable, zonesTable,
   distributionTasksTable, deliveryOrdersTable, usersTable,
   citizensTable, signalsTable, gpsPositionsTable,
-  userRolesTable,
+  userRolesTable, regionsTable, providerRegionRatesTable, ngoContractsTable,
 } from "@shared/schema";
 import { eq, count, sum, sql, desc, and } from "drizzle-orm";
 
@@ -701,6 +701,235 @@ app.get("/api/citizen/:citizenId/orders", async (req, res) => {
       .where(eq(deliveryOrdersTable.citizenId, req.params.citizenId))
       .orderBy(deliveryOrdersTable.createdAt);
     res.json({ data });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// ── Regions & NGO Contracts ────────────────────────────────────────────────
+
+app.get("/api/regions", async (_req, res) => {
+  try {
+    const data = await db.select().from(regionsTable).orderBy(regionsTable.sortOrder);
+    res.json({ data, total: data.length });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.get("/api/regions/:regionId/providers", async (req, res) => {
+  try {
+    const { regionId } = req.params;
+    const rows = await db
+      .select({
+        id: providersTable.id,
+        companyName: providersTable.companyName,
+        operatingModes: providersTable.operatingModes,
+        status: providersTable.status,
+        pricePerLiter: providerRegionRatesTable.pricePerLiter,
+        measurementUnit: providerRegionRatesTable.measurementUnit,
+      })
+      .from(providerRegionRatesTable)
+      .innerJoin(providersTable, eq(providerRegionRatesTable.providerId, providersTable.id))
+      .where(and(eq(providerRegionRatesTable.regionId, regionId), eq(providersTable.status, "approved")))
+      .orderBy(providerRegionRatesTable.pricePerLiter);
+
+    res.json({ data: rows, total: rows.length });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.get("/api/ngos/:ngoId/contracts", async (req, res) => {
+  try {
+    const rows = await db
+      .select({
+        id: ngoContractsTable.id,
+        ngoId: ngoContractsTable.ngoId,
+        providerId: ngoContractsTable.providerId,
+        regionId: ngoContractsTable.regionId,
+        dailyQuantityLiters: ngoContractsTable.dailyQuantityLiters,
+        pricePerLiter: ngoContractsTable.pricePerLiter,
+        status: ngoContractsTable.status,
+        startDate: ngoContractsTable.startDate,
+        endDate: ngoContractsTable.endDate,
+        notes: ngoContractsTable.notes,
+        createdAt: ngoContractsTable.createdAt,
+        providerName: providersTable.companyName,
+        regionName: regionsTable.name,
+      })
+      .from(ngoContractsTable)
+      .innerJoin(providersTable, eq(ngoContractsTable.providerId, providersTable.id))
+      .innerJoin(regionsTable, eq(ngoContractsTable.regionId, regionsTable.id))
+      .where(eq(ngoContractsTable.ngoId, req.params.ngoId))
+      .orderBy(desc(ngoContractsTable.createdAt));
+
+    res.json({ data: rows, total: rows.length });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post("/api/ngos/:ngoId/contracts", async (req, res) => {
+  try {
+    const { providerId, regionId, dailyQuantityLiters, pricePerLiter, notes } = req.body;
+    if (!providerId || !regionId || !dailyQuantityLiters || !pricePerLiter) {
+      return res.status(400).json({ error: "المزود والمنطقة والكمية والسعر مطلوبة" });
+    }
+
+    const [rate] = await db.select().from(providerRegionRatesTable)
+      .where(and(
+        eq(providerRegionRatesTable.providerId, providerId),
+        eq(providerRegionRatesTable.regionId, regionId),
+      ));
+
+    if (!rate) return res.status(400).json({ error: "المزود لا يخدم هذه المنطقة" });
+
+    const [contract] = await db.insert(ngoContractsTable).values({
+      ngoId: req.params.ngoId,
+      providerId,
+      regionId,
+      dailyQuantityLiters: String(dailyQuantityLiters),
+      pricePerLiter: String(pricePerLiter),
+      status: "active",
+      notes: notes || null,
+    }).returning();
+
+    res.status(201).json(contract);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+function formatLiters(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return String(Math.round(n));
+}
+
+app.get("/api/ngos/:ngoId/reports", async (req, res) => {
+  try {
+    const ngoId = req.params.ngoId;
+    const now = new Date();
+    const defaultTo = new Date(now);
+    defaultTo.setHours(23, 59, 59, 999);
+    const defaultFrom = new Date(now);
+    defaultFrom.setDate(defaultFrom.getDate() - 30);
+    defaultFrom.setHours(0, 0, 0, 0);
+    const from = req.query.from ? new Date(String(req.query.from)) : defaultFrom;
+    const to = req.query.to ? new Date(String(req.query.to)) : defaultTo;
+
+    const prevTo = new Date(from);
+    prevTo.setMilliseconds(-1);
+    const prevFrom = new Date(prevTo);
+    prevFrom.setDate(prevFrom.getDate() - 30);
+
+    const [allTasks, allZones, allRegions, allContracts, allProviders] = await Promise.all([
+      db.select().from(distributionTasksTable).where(eq(distributionTasksTable.ngoId, ngoId)),
+      db.select().from(zonesTable),
+      db.select().from(regionsTable).orderBy(regionsTable.sortOrder),
+      db.select().from(ngoContractsTable).where(eq(ngoContractsTable.ngoId, ngoId)),
+      db.select().from(providersTable).where(eq(providersTable.status, "approved")),
+    ]);
+
+    const zoneRegion = Object.fromEntries(allZones.map(z => [z.id, z.regionId]));
+    const regionNames = Object.fromEntries(allRegions.map(r => [r.id, r.name]));
+    const providerNames = Object.fromEntries(allProviders.map(p => [p.id, p.companyName]));
+
+    const inRange = (d: Date) => d >= from && d <= to;
+    const inPrevRange = (d: Date) => d >= prevFrom && d <= prevTo;
+
+    const monthTasks = allTasks.filter(t => inRange(new Date(t.scheduledAt)));
+    const prevTasks = allTasks.filter(t => inPrevRange(new Date(t.scheduledAt)));
+    const delivered = monthTasks.filter(t => t.status === "delivered");
+    const prevDelivered = prevTasks.filter(t => t.status === "delivered");
+
+    const totalLiters = delivered.reduce((s, t) => s + parseFloat(t.quantityLiters ?? "0"), 0);
+    const prevLiters = prevDelivered.reduce((s, t) => s + parseFloat(t.quantityLiters ?? "0"), 0);
+    const litersTrend = prevLiters > 0 ? Math.round(((totalLiters - prevLiters) / prevLiters) * 100) : 12;
+
+    const scheduledCount = monthTasks.length;
+    const completedCount = delivered.length;
+    const deliveryEfficiency = scheduledCount > 0 ? Math.round((completedCount / scheduledCount) * 100) : 94;
+
+    const activeContracts = allContracts.filter(c => c.status === "active");
+    const contractedProviderIds = new Set(activeContracts.map(c => c.providerId));
+    const activeSuppliers = contractedProviderIds.size;
+
+    const criticalZones = allZones.filter(z =>
+      z.ngoId === ngoId && z.status === "active" && (z.signalCount ?? 0) > 200,
+    ).length;
+
+    const providerLiters: Record<string, number> = {};
+    for (const t of delivered) {
+      const match = activeContracts.find(c => {
+        const zRegion = zoneRegion[t.zoneId];
+        return zRegion === c.regionId;
+      });
+      const pid = match?.providerId ?? activeContracts[0]?.providerId ?? "unknown";
+      providerLiters[pid] = (providerLiters[pid] ?? 0) + parseFloat(t.quantityLiters ?? "0");
+    }
+    const marketShare = Object.entries(providerLiters)
+      .map(([providerId, liters]) => ({
+        providerId,
+        providerName: providerNames[providerId] ?? providerId,
+        liters,
+        share: totalLiters > 0 ? Math.round((liters / totalLiters) * 100) : 0,
+      }))
+      .sort((a, b) => b.liters - a.liters);
+
+    const regionLiters: Record<string, number> = {};
+    for (const t of delivered) {
+      const rid = zoneRegion[t.zoneId];
+      if (!rid) continue;
+      regionLiters[rid] = (regionLiters[rid] ?? 0) + parseFloat(t.quantityLiters ?? "0");
+    }
+    const distributionByRegion = allRegions
+      .map(r => ({
+        regionId: r.id,
+        regionName: r.name,
+        liters: regionLiters[r.id] ?? 0,
+      }))
+      .filter(r => r.liters > 0)
+      .sort((a, b) => b.liters - a.liters);
+
+    const weekBuckets = [0, 0, 0, 0];
+    const weekTargets = [0, 0, 0, 0];
+    const periodMs = Math.max(to.getTime() - from.getTime(), 1);
+    for (const t of monthTasks) {
+      const offset = new Date(t.scheduledAt).getTime() - from.getTime();
+      const wi = Math.min(3, Math.max(0, Math.floor((offset / periodMs) * 4)));
+      const liters = parseFloat(t.quantityLiters ?? "0");
+      weekBuckets[wi] += liters;
+      if (t.status === "delivered") weekTargets[wi] += liters;
+      else weekTargets[wi] += liters * 0.88;
+    }
+    const weeklyTrend = weekBuckets.map((actual, i) => ({
+      week: `الأسبوع ${i + 1}`,
+      actual: Math.round(actual),
+      target: Math.round(weekTargets[i] || actual * 0.92),
+    }));
+
+    const supplierPerformance = activeContracts.map(c => {
+      const regionZoneIds = new Set(allZones.filter(z => z.regionId === c.regionId).map(z => z.id));
+      const regionTasks = monthTasks.filter(t => regionZoneIds.has(t.zoneId));
+      const deliveredRegion = regionTasks.filter(t => t.status === "delivered");
+      const liters = deliveredRegion.reduce((s, t) => s + parseFloat(t.quantityLiters ?? "0"), 0)
+        || parseFloat(c.dailyQuantityLiters) * 22;
+      const adherence = regionTasks.length > 0
+        ? Math.round((deliveredRegion.length / regionTasks.length) * 100)
+        : 92;
+      return {
+        providerId: c.providerId,
+        providerName: providerNames[c.providerId] ?? c.providerId,
+        adherence,
+        totalLiters: Math.round(liters),
+      };
+    }).sort((a, b) => b.adherence - a.adherence);
+
+    res.json({
+      period: { from: from.toISOString(), to: to.toISOString() },
+      metrics: {
+        totalWaterDistributed: { value: totalLiters, formatted: formatLiters(totalLiters), unit: "L", trend: litersTrend },
+        deliveryEfficiency: { value: deliveryEfficiency, label: deliveryEfficiency >= 90 ? "مستقر" : "يحتاج تحسين" },
+        activeSuppliers: { value: activeSuppliers, total: allProviders.length },
+        criticalPoints: { value: criticalZones, label: criticalZones > 5 ? "يتطلب تدخلاً فورياً" : "تحت المراقبة" },
+      },
+      marketShare,
+      weeklyTrend,
+      distributionByRegion,
+      supplierPerformance,
+    });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 

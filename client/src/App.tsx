@@ -6,6 +6,10 @@ import DriverPortal from "./pages/DriverPortal";
 import Citizen from "./pages/Citizen";
 import MapView from "./pages/MapView";
 import { api, Provider, Zone } from "./api";
+import {
+  AppPageId, DEFAULT_NGO_PAGE, NGO_NAV_GROUPS, NGO_STANDALONE_NAV,
+  ngoSectionFromPage, pageLabel,
+} from "./ngoNav";
 
 type Role = "admin" | "ngo" | "provider" | "driver" | "citizen";
 type AuthMode = "login" | "register";
@@ -57,15 +61,12 @@ const ROLES: { id: Role; label: string; color: string }[] = [
 
 const REGISTER_ROLES = ROLES.filter(role => role.id === "ngo" || role.id === "provider");
 
-const ROLE_NAV: Record<Role, { id: string; label: string }[]> = {
+const ROLE_NAV: Record<Role, { id: AppPageId; label: string }[]> = {
   admin: [
     { id: "main", label: "لوحة الإشراف" },
     { id: "map", label: "الخريطة الحية" },
   ],
-  ngo: [
-    { id: "main", label: "بوابة المنظمة" },
-    { id: "map", label: "الخريطة الحية" },
-  ],
+  ngo: [],
   provider: [
     { id: "main", label: "بوابة المزود" },
     { id: "map", label: "الخريطة الحية" },
@@ -309,7 +310,11 @@ function RoleFields({
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [page, setPage] = useState<"main" | "map">("main");
+  const [page, setPage] = useState<AppPageId>("main");
+  const [collapsedNavGroups, setCollapsedNavGroups] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(NGO_NAV_GROUPS.map(g => [g.id, !g.defaultOpen])),
+  );
+  const [ngoBadges, setNgoBadges] = useState({ active: 0, delivered: 0 });
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(() => ({ ...emptyAuthForm(), currentPassword: "", newPassword: "" }));
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -340,6 +345,36 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (user?.role === "ngo" && page === "main") {
+      setPage(DEFAULT_NGO_PAGE);
+    }
+  }, [user?.role, page]);
+
+  useEffect(() => {
+    if (user?.role !== "ngo") return;
+    fetch("/api/tasks")
+      .then(r => r.json())
+      .then(res => {
+        const tasks = res.data ?? [];
+        setNgoBadges({
+          active: tasks.filter((t: { status: string }) => t.status === "pending" || t.status === "in_progress").length,
+          delivered: tasks.filter((t: { status: string }) => t.status === "delivered").length,
+        });
+      })
+      .catch(() => undefined);
+  }, [user?.role, page]);
+
+  const toggleNavGroup = (groupId: string) => {
+    setCollapsedNavGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
+
+  const ngoBadgeFor = (key?: "active" | "delivered") => {
+    if (!key) return null;
+    const value = ngoBadges[key];
+    return value > 0 ? value : null;
+  };
+
+  useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
       if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
     };
@@ -351,12 +386,14 @@ export default function App() {
 
   const renderPage = () => {
     if (page === "map") return <MapView />;
+    const ngoSection = ngoSectionFromPage(page);
+    if (ngoSection) return <NgoPortal section={ngoSection} />;
     switch (role) {
       case "admin": return <AdminPortal />;
-      case "ngo": return <NgoPortal />;
       case "provider": return <ProviderPortal />;
       case "driver": return <DriverPortal />;
       case "citizen": return <Citizen />;
+      default: return null;
     }
   };
 
@@ -412,15 +449,64 @@ export default function App() {
         </div>
 
         <nav className="sidebar-nav" style={{ marginTop: 8 }}>
-          {ROLE_NAV[role].map(item => (
-            <button
-              key={item.id}
-              className={`nav-item ${page === item.id ? "active" : ""}`}
-              onClick={() => setPage(item.id as "main" | "map")}
-            >
-              {item.label}
-            </button>
-          ))}
+          {role === "ngo" ? (
+            <>
+              {NGO_NAV_GROUPS.map(group => {
+                const collapsed = collapsedNavGroups[group.id];
+                return (
+                  <div key={group.id} className="nav-group">
+                    <button
+                      type="button"
+                      className="nav-group-toggle"
+                      onClick={() => toggleNavGroup(group.id)}
+                      aria-expanded={!collapsed}
+                    >
+                      <span>{group.label}</span>
+                      <span className={`nav-group-chevron ${collapsed ? "nav-group-chevron-collapsed" : ""}`} aria-hidden>▾</span>
+                    </button>
+                    {!collapsed && group.items.map(item => {
+                      const badge = ngoBadgeFor(item.badgeKey);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={`nav-item nav-sub-item ${page === item.id ? "active" : ""}`}
+                          onClick={() => setPage(item.id as AppPageId)}
+                        >
+                          <span>{item.label}</span>
+                          {badge != null && (
+                            <span className={`nav-item-badge ${item.badgeKey === "delivered" ? "nav-item-badge-green" : ""}`}>
+                              {badge}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+              {NGO_STANDALONE_NAV.map(item => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`nav-item ${page === item.id ? "active" : ""}`}
+                  onClick={() => setPage(item.id as AppPageId)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </>
+          ) : (
+            ROLE_NAV[role].map(item => (
+              <button
+                key={item.id}
+                className={`nav-item ${page === item.id ? "active" : ""}`}
+                onClick={() => setPage(item.id)}
+              >
+                {item.label}
+              </button>
+            ))
+          )}
         </nav>
 
         <div style={{ marginTop: "auto", padding: "16px 20px", borderTop: "1px solid #d8eef8" }}>
@@ -432,7 +518,7 @@ export default function App() {
       <div className="main" style={page === "map" ? { display: "flex", flexDirection: "column" } : {}}>
         <header className="app-header">
           <div>
-            <h2>{page === "map" ? "الخريطة الحية" : currentRole.label}</h2>
+            <h2>{pageLabel(page, role)}</h2>
             <span>{ROLE_DESCRIPTIONS[role]}</span>
           </div>
 
