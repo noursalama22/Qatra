@@ -5,6 +5,7 @@ import NgoPortal from "./pages/NgoPortal";
 import ProviderPortal from "./pages/ProviderPortal";
 import ProviderContracts from "./pages/ProviderContracts";
 import ProviderFleet from "./pages/ProviderFleet";
+import ProviderTasks from "./pages/ProviderTasks";
 import DriverInvite from "./pages/DriverInvite";
 import NotificationBell from "./components/NotificationBell";
 import DriverPortal from "./pages/DriverPortal";
@@ -321,6 +322,7 @@ function AuthenticatedApp({
           <Route element={<RequireRole role="provider" />}>
             <Route path="/provider" element={<ProviderPortal />} />
             <Route path="/provider/contracts" element={<ProviderContracts />} />
+            <Route path="/provider/tasks" element={<ProviderTasks />} />
             <Route path="/provider/fleet" element={<ProviderFleet />} />
             <Route path="/provider/map" element={<MapView />} />
           </Route>

@@ -29,6 +29,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
   provider: [
     { path: "/provider", label: "لوحة التحكم", end: true },
     { path: "/provider/contracts", label: "العقود" },
+    { path: "/provider/tasks", label: "المهام" },
     { path: "/provider/fleet", label: "إدارة السائقين" },
     { path: "/provider/map", label: "الخريطة الحية" },
   ],
@@ -110,6 +111,7 @@ export function pageLabel(pathname: string, role: Role): string {
   if (role === "admin") return "لوحة الإشراف";
   if (role === "provider") {
     if (pathname === "/provider/contracts") return "العقود";
+    if (pathname === "/provider/tasks") return "المهام";
     if (pathname === "/provider/fleet") return "إدارة السائقين";
     return "لوحة التحكم";
   }

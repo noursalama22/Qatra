@@ -1,0 +1,93 @@
+Build a "المهام" page for the Service Provider web dashboard with the 
+following specifications:
+
+─────────────────────────────────────────
+NAVIGATION
+─────────────────────────────────────────
+Add "المهام" to the provider sidebar.
+The page has two tabs:
+- "مهام المنظمات" (NGO tasks)
+- "مهام المواطنين" (Citizen tasks)
+
+─────────────────────────────────────────
+DISPLAY FORMAT
+─────────────────────────────────────────
+Web-only dashboard. TABLE view only. No cards, no responsive switching.
+
+─────────────────────────────────────────
+COUNTERS (top of each tab)
+─────────────────────────────────────────
+4 summary counters:
+- إجمالي المهام
+- معلقة
+- جارية
+- مكتملة
+
+─────────────────────────────────────────
+FILTERS (below counters)
+─────────────────────────────────────────
+- Status: all / معلقة / مقبولة / جارية / مكتملة / ملغية
+- Date range picker
+- Region dropdown
+- Search: by task number or client name
+
+─────────────────────────────────────────
+TABLE COLUMNS
+─────────────────────────────────────────
+NGO tab:
+| رقم الرحلة | رقم العقد / المنظمة | المنطقة | التاريخ | الكمية (لتر) | السائق (اسم + لوحة + منطقة) | الحالة | إجراء |
+
+Citizen tab:
+| رقم الطلب | اسم المواطن | المنطقة | التاريخ | الكمية (لتر) | طريقة الدفع | السائق (اسم + لوحة + منطقة) | الحالة | إجراء |
+
+Driver column shows:
+- Driver name
+- Truck plate number
+- Assigned region
+- If no driver assigned yet: "لم يُعيَّن بعد" in muted gray
+
+─────────────────────────────────────────
+ACTION BUTTON (single button per row, changes by status)
+─────────────────────────────────────────
+معلقة    → "تعيين سائق"         (primary blue button)
+مقبولة   → "عرض السائق"         (secondary outlined button)
+جارية    → "تتبع على الخريطة"   (teal button)
+مكتملة   → "اعتماد التسليم"     (green button)
+           after approval: "عرض التفاصيل" (gray outlined)
+ملغية    → "عرض السبب"          (gray outlined button)
+
+─────────────────────────────────────────
+STATUS BADGES
+─────────────────────────────────────────
+معلقة   → amber/yellow badge
+مقبولة  → blue badge
+جارية   → teal badge
+مكتملة  → green badge
+ملغية   → red badge
+
+─────────────────────────────────────────
+ROW CLICK BEHAVIOR
+─────────────────────────────────────────
+Clicking anywhere on a row (except the action button)
+opens a side panel from the right with full task details:
+- All task fields
+- Driver info + truck data
+- Status timeline (history of state changes)
+- For completed tasks: delivery photos uploaded by driver
+- For citizen tasks: payment method + escrow status
+- For NGO tasks: parent contract number + organization name
+
+─────────────────────────────────────────
+EMPTY STATES
+─────────────────────────────────────────
+NGO tab empty:
+"لا توجد مهام من منظمات بعد — ابدأ بقبول عقد"
+
+Citizen tab empty:
+"لا توجد طلبات من مواطنين بعد"
+
+─────────────────────────────────────────
+MOCK DATA
+─────────────────────────────────────────
+Populate each tab with at least 5 mock rows covering 
+all 5 status types so the UI is testable immediately.
