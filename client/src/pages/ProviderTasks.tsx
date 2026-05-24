@@ -692,6 +692,179 @@ function TrackingModal({ target, onClose }: { target: TrackTarget; onClose: () =
   );
 }
 
+type ApproveTarget = {
+  taskId: string;
+  type: "ngo" | "citizen";
+  label: string;
+  region: string;
+  quantity: number;
+  date: string;
+  driver: { name: string; plate: string } | null;
+  partyName: string;
+};
+
+function ApproveModal({
+  target,
+  onClose,
+  onConfirm,
+}: {
+  target: ApproveTarget;
+  onClose: () => void;
+  onConfirm: (photos: string[], note: string) => void;
+}) {
+  const [photos, setPhotos] = useState<{ url: string; name: string }[]>([]);
+  const [note, setNote] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = (files: FileList | null) => {
+    if (!files) return;
+    const next = Array.from(files).map(f => ({ url: URL.createObjectURL(f), name: f.name }));
+    setPhotos(prev => [...prev, ...next]);
+  };
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, backdropFilter: "blur(2px)" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, maxHeight: "92vh", overflow: "hidden", display: "flex", flexDirection: "column" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ background: "linear-gradient(135deg, #14532d 0%, #16a34a 100%)", padding: "20px 24px", color: "#fff", position: "relative", flexShrink: 0 }}>
+          <button
+            onClick={onClose}
+            style={{ position: "absolute", top: 14, left: 14, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 30, height: 30, color: "#fff", cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}
+          >×</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>اعتماد التسليم</div>
+          </div>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>{target.label} · {target.partyName} · {target.region}</div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 20 }}>
+
+          {/* Task summary */}
+          <div style={{ background: "#f8fcff", border: "1px solid #d8eef8", borderRadius: 12, padding: "16px 16px" }}>
+            <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>ملخص التسليم</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {[
+                { label: "المنطقة",   value: target.region },
+                { label: "التاريخ",   value: fmtDate(target.date) },
+                { label: "الكمية",    value: fmtVol(target.quantity) },
+                { label: "السائق",    value: target.driver ? `${target.driver.name} — ${target.driver.plate}` : "—" },
+              ].map(row => (
+                <div key={row.label} style={{ background: "#fff", border: "1px solid #e8f5fd", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, color: "#6b8aa0", fontWeight: 600, marginBottom: 3 }}>{row.label}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{row.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Photo upload */}
+          <div>
+            <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
+              صور التسليم <span style={{ fontSize: 10, fontWeight: 400, color: "#94a3b8", textTransform: "none" }}>(اختياري)</span>
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={e => addFiles(e.target.files)}
+            />
+            <div
+              onDragOver={e => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={e => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}
+              onClick={() => fileRef.current?.click()}
+              style={{
+                border: dragging ? "2px dashed #0284c7" : "2px dashed #d8eef8",
+                borderRadius: 10,
+                background: dragging ? "#f0f9ff" : "#fafcff",
+                padding: "22px 16px",
+                textAlign: "center",
+                cursor: "pointer",
+                transition: "all 0.15s",
+                marginBottom: photos.length > 0 ? 12 : 0,
+              }}
+            >
+              <div style={{ marginBottom: 6 }}>
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={dragging ? "#0284c7" : "#94a3b8"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block" }}>
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: dragging ? "#0284c7" : "#6b8aa0" }}>اسحب الصور هنا أو انقر للرفع</div>
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>PNG, JPG, WEBP — حتى 5 صور</div>
+            </div>
+
+            {photos.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {photos.map((p, i) => (
+                  <div key={i} style={{ position: "relative", width: 72, height: 72 }}>
+                    <img src={p.url} alt={p.name} style={{ width: 72, height: 72, borderRadius: 8, objectFit: "cover", border: "2px solid #0284c7" }} />
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); setPhotos(prev => prev.filter((_, j) => j !== i)); }}
+                      style={{ position: "absolute", top: -6, left: -6, width: 20, height: 20, borderRadius: "50%", background: "#dc2626", border: "none", color: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit", fontWeight: 700, lineHeight: 1 }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Notes */}
+          <div>
+            <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+              ملاحظات الاعتماد <span style={{ fontSize: 10, fontWeight: 400, color: "#94a3b8", textTransform: "none" }}>(اختياري)</span>
+            </div>
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="أضف أي ملاحظات تتعلق بعملية التسليم..."
+              rows={3}
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid #d8eef8", borderRadius: 8, fontFamily: "inherit", fontSize: 13, color: "#12384f", background: "#fafcff", resize: "vertical", boxSizing: "border-box", outline: "none" }}
+            />
+          </div>
+
+          {/* Warning note */}
+          <div style={{ background: "#fffbeb", border: "1px solid #fbbf24", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <span style={{ fontSize: 16, lineHeight: 1.3 }}>⚠️</span>
+            <span style={{ fontSize: 12, color: "#92400e", fontWeight: 600, lineHeight: 1.5 }}>
+              بعد الاعتماد سيتم الإفراج عن مبلغ الضمان للمزود. هذا الإجراء لا يمكن التراجع عنه.
+            </span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "16px 24px", borderTop: "1px solid #d8eef8", display: "flex", gap: 10, flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ flex: 1, padding: "11px 0", border: "1px solid #d8eef8", borderRadius: 8, background: "#fff", color: "#6b8aa0", fontFamily: "inherit", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+          >إلغاء</button>
+          <button
+            type="button"
+            onClick={() => onConfirm(photos.map(p => p.url), note)}
+            style={{ flex: 2, padding: "11px 0", border: "none", borderRadius: 8, background: "#16a34a", color: "#fff", fontFamily: "inherit", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+          >✓ تأكيد الاعتماد</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type AssignTarget = { taskId: string; taskLabel: string; region: string; quantity: number; type: "ngo" | "citizen"; isReassign?: boolean; currentDriverName?: string };
 
 function AssignDriverModal({
@@ -985,6 +1158,7 @@ export default function ProviderTasks() {
   const [citTasks, setCitTasks] = useState<CitizenTask[]>(CITIZEN_TASKS_MOCK);
   const [assignTarget, setAssignTarget] = useState<AssignTarget | null>(null);
   const [trackTarget, setTrackTarget] = useState<TrackTarget | null>(null);
+  const [approveTarget, setApproveTarget] = useState<ApproveTarget | null>(null);
 
   const filteredNgo = ngoTasks.filter(t => {
     if (ngoStatus !== "all" && t.status !== ngoStatus) return false;
@@ -1056,6 +1230,29 @@ export default function ProviderTasks() {
       ));
     }
     setAssignTarget(null);
+  };
+
+  const handleApproveConfirm = (photos: string[], note: string) => {
+    if (!approveTarget) return;
+    const timeEntry = { label: "اعتماد التسليم", date: nowLabel(), ...(note ? { note } : {}) };
+    if (approveTarget.type === "ngo") {
+      setNgoTasks(prev => prev.map(t =>
+        t.id === approveTarget.taskId
+          ? { ...t, deliveryApproved: true, deliveryPhotos: photos, timeline: [...t.timeline, timeEntry] }
+          : t
+      ));
+      if (selectedNgoTask?.id === approveTarget.taskId)
+        setSelectedNgoTask(prev => prev ? { ...prev, deliveryApproved: true, deliveryPhotos: photos } : null);
+    } else {
+      setCitTasks(prev => prev.map(t =>
+        t.id === approveTarget.taskId
+          ? { ...t, deliveryApproved: true, deliveryPhotos: photos, timeline: [...t.timeline, timeEntry] }
+          : t
+      ));
+      if (selectedCitTask?.id === approveTarget.taskId)
+        setSelectedCitTask(prev => prev ? { ...prev, deliveryApproved: true, deliveryPhotos: photos } : null);
+    }
+    setApproveTarget(null);
   };
 
   const thStyle: React.CSSProperties = {
@@ -1165,7 +1362,7 @@ export default function ProviderTasks() {
                               } else if (action === "track" && task.driver) {
                                 setTrackTarget({ label: task.tripNumber, region: task.region, quantity: task.quantityLiters, driver: task.driver, timeline: task.timeline });
                               } else if (action === "approve") {
-                                handleNgoApprove(task.id);
+                                setApproveTarget({ taskId: task.id, type: "ngo", label: task.tripNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.orgName });
                               } else {
                                 setSelectedNgoTask(task);
                               }
@@ -1258,7 +1455,7 @@ export default function ProviderTasks() {
                               } else if (action === "track" && task.driver) {
                                 setTrackTarget({ label: task.orderNumber, region: task.region, quantity: task.quantityLiters, driver: task.driver, timeline: task.timeline });
                               } else if (action === "approve") {
-                                handleCitApprove(task.id);
+                                setApproveTarget({ taskId: task.id, type: "citizen", label: task.orderNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.citizenName });
                               } else {
                                 setSelectedCitTask(task);
                               }
@@ -1303,6 +1500,14 @@ export default function ProviderTasks() {
         <TrackingModal
           target={trackTarget}
           onClose={() => setTrackTarget(null)}
+        />
+      )}
+
+      {approveTarget && (
+        <ApproveModal
+          target={approveTarget}
+          onClose={() => setApproveTarget(null)}
+          onConfirm={handleApproveConfirm}
         />
       )}
     </div>
