@@ -1,4 +1,11 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+
+const PROVIDER_PAGE_ROUTES: Record<string, string> = {
+  contracts: "/provider/contracts",
+  fleet: "/provider/fleet",
+  main: "/provider",
+};
 
 type Notification = {
   id: string;
@@ -44,7 +51,8 @@ const TYPE_ICON: Record<string, string> = {
   driver_accepted: "✅",
 };
 
-export default function NotificationBell({ onNavigate }: { onNavigate: (page: string) => void }) {
+export default function NotificationBell() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [seenIds, setSeenIds] = useState<Set<string>>(getSeenIds);
@@ -82,14 +90,14 @@ export default function NotificationBell({ onNavigate }: { onNavigate: (page: st
     markSeen([n.id]);
     setSeenIds(prev => new Set([...prev, n.id]));
     setOpen(false);
-    onNavigate(n.entityPage);
+    navigate(PROVIDER_PAGE_ROUTES[n.entityPage] ?? "/provider");
   };
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button
         onClick={() => { setOpen(o => !o); if (!open) load(); }}
-        style={{ position: "relative", background: "none", border: "1px solid #d8eef8", borderRadius: 10, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", background: open ? "#f0f9ff" : "white" } as any}
+        style={{ position: "relative", border: "1px solid #d8eef8", borderRadius: 10, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", background: open ? "#f0f9ff" : "white" }}
         title="الإشعارات"
       >
         🔔
@@ -163,7 +171,7 @@ export default function NotificationBell({ onNavigate }: { onNavigate: (page: st
           {notifications.length > 0 && (
             <div style={{ padding: "10px 16px", borderTop: "1px solid #f0f9ff", textAlign: "center" }}>
               <button
-                onClick={() => { setOpen(false); onNavigate("contracts"); }}
+                onClick={() => { setOpen(false); navigate("/provider/contracts"); }}
                 style={{ background: "none", border: "none", color: "#0284c7", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
               >
                 عرض كل العقود المعلّقة ←

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 type Driver = { id: string; vehicleType: string; status: string; driverType: string; phone: string; providerId: string };
 type Task = { id: string; zoneId: string; status: string; quantityLiters: string; scheduledAt: string };
@@ -83,7 +84,8 @@ type ReviewContract = {
   priority: string;
 };
 
-export default function ProviderPortal({ onNavigate }: { onNavigate?: (page: string) => void }) {
+export default function ProviderPortal() {
+  const navigate = useNavigate();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -155,7 +157,7 @@ export default function ProviderPortal({ onNavigate }: { onNavigate?: (page: str
             </div>
           </div>
           <button
-            onClick={() => onNavigate?.("contracts")}
+            onClick={() => navigate("/provider/contracts")}
             style={{ background: "linear-gradient(135deg, #d97706, #f59e0b)", color: "white", border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
           >
             مراجعة العقود ←

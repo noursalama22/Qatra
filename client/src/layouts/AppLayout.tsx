@@ -2,6 +2,7 @@ import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useRef, useSta
 import { Outlet, useLocation } from "react-router-dom";
 import { api, Provider, Zone } from "../api";
 import { RoleFields } from "../App";
+import NotificationBell from "../components/NotificationBell";
 import Sidebar from "../components/Sidebar";
 import { getRoleMeta, ROLE_DESCRIPTIONS, roleStatusLabel } from "../constants/roles";
 import { isMapRoute, pageLabel } from "../routes";
@@ -136,7 +137,10 @@ export default function AppLayout({ user, setUser, onLogout }: Props) {
             <span>{ROLE_DESCRIPTIONS[role]}</span>
           </div>
 
-          <div className="user-menu" ref={menuRef}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {role === "provider" && <NotificationBell />}
+
+            <div className="user-menu" ref={menuRef}>
             <button className="user-menu-trigger" onClick={() => setMenuOpen(open => !open)} aria-haspopup="menu" aria-expanded={menuOpen}>
               <span className="avatar" style={{ background: currentRole.color }}>{initials}</span>
               <span className="user-menu-copy">
@@ -152,6 +156,7 @@ export default function AppLayout({ user, setUser, onLogout }: Props) {
                 <button onClick={handleLogout} role="menuitem">تسجيل الخروج</button>
               </div>
             )}
+            </div>
           </div>
         </header>
 
