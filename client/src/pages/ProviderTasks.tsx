@@ -692,176 +692,230 @@ function TrackingModal({ target, onClose }: { target: TrackTarget; onClose: () =
   );
 }
 
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+const CITIZEN_DRIVER_PHOTOS = [
+  { label: "صورة عداد الخزان",   url: "https://picsum.photos/seed/meter42/400/300" },
+  { label: "صورة مستوى المياه",  url: "https://picsum.photos/seed/water99/400/300" },
+];
+const ORG_DRIVER_PHOTOS = [
+  { label: "صورة من مكان التسليم", url: "https://picsum.photos/seed/delivery77/400/300" },
+];
+
 type ApproveTarget = {
   taskId: string;
   type: "ngo" | "citizen";
+  contractType: "citizen" | "organization";
   label: string;
   region: string;
   quantity: number;
   date: string;
   driver: { name: string; plate: string } | null;
   partyName: string;
+  driverGps: [number, number];
+  destGps: [number, number];
 };
 
 function ApproveModal({
   target,
   onClose,
-  onConfirm,
+  onApprove,
+  onReject,
 }: {
   target: ApproveTarget;
   onClose: () => void;
-  onConfirm: (photos: string[], note: string) => void;
+  onApprove: () => void;
+  onReject: (reason: string) => void;
 }) {
-  const [photos, setPhotos] = useState<{ url: string; name: string }[]>([]);
-  const [note, setNote] = useState("");
-  const [dragging, setDragging] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [rejectMode, setRejectMode] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
-  const addFiles = (files: FileList | null) => {
-    if (!files) return;
-    const next = Array.from(files).map(f => ({ url: URL.createObjectURL(f), name: f.name }));
-    setPhotos(prev => [...prev, ...next]);
-  };
+  const driverPhotos = target.contractType === "citizen" ? CITIZEN_DRIVER_PHOTOS : ORG_DRIVER_PHOTOS;
+  const distance = haversineMeters(target.driverGps[0], target.driverGps[1], target.destGps[0], target.destGps[1]);
+  const locationOk = distance <= 200;
+  const canApprove = locationOk && driverPhotos.length > 0;
+
+  const sectionLabel: React.CSSProperties = { fontSize: 10, color: "#0284c7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 };
+  const card: React.CSSProperties = { background: "#f8fcff", border: "0.5px solid #d8eef8", borderRadius: 10, padding: "14px 14px" };
 
   return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, backdropFilter: "blur(2px)" }}
-      onClick={onClose}
-    >
+    <>
       <div
-        style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, maxHeight: "92vh", overflow: "hidden", display: "flex", flexDirection: "column" }}
-        onClick={e => e.stopPropagation()}
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, backdropFilter: "blur(2px)" }}
+        onClick={onClose}
       >
-        {/* Header */}
-        <div style={{ background: "linear-gradient(135deg, #14532d 0%, #16a34a 100%)", padding: "20px 24px", color: "#fff", position: "relative", flexShrink: 0 }}>
-          <button
-            onClick={onClose}
-            style={{ position: "absolute", top: 14, left: 14, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 30, height: 30, color: "#fff", cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}
-          >×</button>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-              <polyline points="22 4 12 14.01 9 11.01"/>
-            </svg>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>اعتماد التسليم</div>
-          </div>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>{target.label} · {target.partyName} · {target.region}</div>
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 20 }}>
-
-          {/* Task summary */}
-          <div style={{ background: "#f8fcff", border: "1px solid #d8eef8", borderRadius: 12, padding: "16px 16px" }}>
-            <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>ملخص التسليم</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {[
-                { label: "المنطقة",   value: target.region },
-                { label: "التاريخ",   value: fmtDate(target.date) },
-                { label: "الكمية",    value: fmtVol(target.quantity) },
-                { label: "السائق",    value: target.driver ? `${target.driver.name} — ${target.driver.plate}` : "—" },
-              ].map(row => (
-                <div key={row.label} style={{ background: "#fff", border: "1px solid #e8f5fd", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 10, color: "#6b8aa0", fontWeight: 600, marginBottom: 3 }}>{row.label}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{row.value}</div>
-                </div>
-              ))}
-            </div>
+        <div
+          style={{ background: "#fff", borderRadius: 14, width: "100%", maxWidth: 560, maxHeight: "92vh", overflow: "hidden", display: "flex", flexDirection: "column" }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div style={{ background: "linear-gradient(135deg, #14532d 0%, #16a34a 100%)", padding: "18px 22px", color: "#fff", position: "relative", flexShrink: 0 }}>
+            <button
+              onClick={onClose}
+              style={{ position: "absolute", top: 13, left: 14, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 28, height: 28, color: "#fff", cursor: "pointer", fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}
+            >×</button>
+            <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 3 }}>اعتماد التسليم</div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>{target.label} · {target.partyName} · {target.region}</div>
           </div>
 
-          {/* Photo upload */}
-          <div>
-            <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
-              صور التسليم <span style={{ fontSize: 10, fontWeight: 400, color: "#94a3b8", textTransform: "none" }}>(اختياري)</span>
-            </div>
-            <input
-              ref={fileRef}
-              type="file"
-              multiple
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={e => addFiles(e.target.files)}
-            />
-            <div
-              onDragOver={e => { e.preventDefault(); setDragging(true); }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={e => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}
-              onClick={() => fileRef.current?.click()}
-              style={{
-                border: dragging ? "2px dashed #0284c7" : "2px dashed #d8eef8",
-                borderRadius: 10,
-                background: dragging ? "#f0f9ff" : "#fafcff",
-                padding: "22px 16px",
-                textAlign: "center",
-                cursor: "pointer",
-                transition: "all 0.15s",
-                marginBottom: photos.length > 0 ? 12 : 0,
-              }}
-            >
-              <div style={{ marginBottom: 6 }}>
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={dragging ? "#0284c7" : "#94a3b8"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block" }}>
-                  <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-                  <polyline points="21 15 16 10 5 21"/>
-                </svg>
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: dragging ? "#0284c7" : "#6b8aa0" }}>اسحب الصور هنا أو انقر للرفع</div>
-              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>PNG, JPG, WEBP — حتى 5 صور</div>
-            </div>
+          {/* Body */}
+          <div style={{ padding: "18px 22px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 14 }}>
 
-            {photos.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {photos.map((p, i) => (
-                  <div key={i} style={{ position: "relative", width: 72, height: 72 }}>
-                    <img src={p.url} alt={p.name} style={{ width: 72, height: 72, borderRadius: 8, objectFit: "cover", border: "2px solid #0284c7" }} />
-                    <button
-                      type="button"
-                      onClick={e => { e.stopPropagation(); setPhotos(prev => prev.filter((_, j) => j !== i)); }}
-                      style={{ position: "absolute", top: -6, left: -6, width: 20, height: 20, borderRadius: "50%", background: "#dc2626", border: "none", color: "#fff", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit", fontWeight: 700, lineHeight: 1 }}
-                    >×</button>
+            {/* Task summary */}
+            <div style={card}>
+              <div style={sectionLabel}>ملخص المهمة</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  { label: "المنطقة",  value: target.region },
+                  { label: "التاريخ",  value: fmtDate(target.date) },
+                  { label: "الكمية",   value: fmtVol(target.quantity) },
+                  { label: "السائق",   value: target.driver ? `${target.driver.name} · ${target.driver.plate}` : "—" },
+                ].map(row => (
+                  <div key={row.label}>
+                    <div style={{ fontSize: 10, color: "#6b8aa0", fontWeight: 600, marginBottom: 2 }}>{row.label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{row.value}</div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Location verification */}
+            <div style={card}>
+              <div style={sectionLabel}>
+                التحقق من الموقع
+                <span style={{ fontWeight: 400, fontSize: 9, color: "#94a3b8", marginRight: 6, textTransform: "none" }}>(تلقائي)</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 11, color: "#6b8aa0", lineHeight: 1.7 }}>
+                  <div>موقع السائق: {target.driverGps[0].toFixed(4)}, {target.driverGps[1].toFixed(4)}</div>
+                  <div>الوجهة المطلوبة: {target.destGps[0].toFixed(4)}, {target.destGps[1].toFixed(4)}</div>
+                </div>
+                {locationOk ? (
+                  <span style={{ background: "#dcfce7", color: "#166534", border: "0.5px solid #86efac", borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                    الموقع مطابق ✓
+                  </span>
+                ) : (
+                  <span style={{ background: "#fee2e2", color: "#991b1b", border: "0.5px solid #fca5a5", borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                    الموقع غير مطابق ✗ — بُعد {distance}م
+                  </span>
+                )}
+              </div>
+              {!locationOk && (
+                <div style={{ marginTop: 10, background: "#fef2f2", border: "0.5px solid #fca5a5", borderRadius: 8, padding: "8px 10px", fontSize: 11, color: "#991b1b", fontWeight: 600 }}>
+                  لا يمكن اعتماد التسليم — الموقع خارج نطاق 200 متر من الوجهة المحددة.
+                </div>
+              )}
+            </div>
+
+            {/* Driver photos — read-only */}
+            <div>
+              <div style={sectionLabel}>صور التسليم — مُرفوعة من السائق</div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {driverPhotos.map((p, i) => (
+                  <div key={i} style={{ flex: 1, minWidth: 170, border: "0.5px solid #d8eef8", borderRadius: 10, overflow: "hidden", background: "#f8fcff" }}>
+                    <img
+                      src={p.url}
+                      alt={p.label}
+                      style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }}
+                    />
+                    <div style={{ padding: "8px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#12384f" }}>{p.label}</span>
+                      <button
+                        type="button"
+                        onClick={() => setLightboxSrc(p.url)}
+                        style={{ fontSize: 10, padding: "3px 8px", border: "0.5px solid #0284c7", borderRadius: 6, color: "#0284c7", background: "#f0f9ff", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, whiteSpace: "nowrap" }}
+                      >عرض كامل</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Rejection reason panel */}
+            {rejectMode && (
+              <div style={{ background: "#fff5f5", border: "0.5px solid #fca5a5", borderRadius: 10, padding: "14px 14px" }}>
+                <div style={{ ...sectionLabel, color: "#dc2626" }}>سبب الرفض</div>
+                <textarea
+                  autoFocus
+                  value={rejectReason}
+                  onChange={e => setRejectReason(e.target.value)}
+                  placeholder="اكتب سبب رفض التسليم بوضوح..."
+                  rows={3}
+                  style={{ width: "100%", padding: "10px 12px", border: "0.5px solid #fca5a5", borderRadius: 8, fontFamily: "inherit", fontSize: 13, color: "#12384f", background: "#fff", resize: "vertical", boxSizing: "border-box", outline: "none" }}
+                />
+              </div>
+            )}
+
+            {/* Escrow warning */}
+            {!rejectMode && (
+              <div style={{ background: "#fffbeb", border: "0.5px solid #fbbf24", borderRadius: 8, padding: "10px 12px", display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <span style={{ fontSize: 14, flexShrink: 0 }}>⚠️</span>
+                <span style={{ fontSize: 12, color: "#92400e", fontWeight: 600, lineHeight: 1.5 }}>
+                  بعد الاعتماد سيتم الإفراج عن مبلغ الضمان للمزود. هذا الإجراء لا يمكن التراجع عنه.
+                </span>
               </div>
             )}
           </div>
 
-          {/* Notes */}
-          <div>
-            <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
-              ملاحظات الاعتماد <span style={{ fontSize: 10, fontWeight: 400, color: "#94a3b8", textTransform: "none" }}>(اختياري)</span>
-            </div>
-            <textarea
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              placeholder="أضف أي ملاحظات تتعلق بعملية التسليم..."
-              rows={3}
-              style={{ width: "100%", padding: "10px 12px", border: "1px solid #d8eef8", borderRadius: 8, fontFamily: "inherit", fontSize: 13, color: "#12384f", background: "#fafcff", resize: "vertical", boxSizing: "border-box", outline: "none" }}
-            />
+          {/* Footer */}
+          <div style={{ padding: "14px 22px", borderTop: "0.5px solid #d8eef8", display: "flex", gap: 8, flexShrink: 0 }}>
+            {!rejectMode ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setRejectMode(true)}
+                  style={{ flex: 1, padding: "11px 0", border: "1.5px solid #dc2626", borderRadius: 8, background: "#fff", color: "#dc2626", fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                >رفض التسليم</button>
+                <button
+                  type="button"
+                  disabled={!canApprove}
+                  onClick={onApprove}
+                  title={!locationOk ? "لا يمكن الاعتماد: الموقع غير مطابق" : ""}
+                  style={{ flex: 2, padding: "11px 0", border: "none", borderRadius: 8, background: canApprove ? "#16a34a" : "#e2e8f0", color: canApprove ? "#fff" : "#94a3b8", fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: canApprove ? "pointer" : "not-allowed", transition: "all 0.15s" }}
+                >✓ اعتماد التسليم</button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setRejectMode(false)}
+                  style={{ flex: 1, padding: "11px 0", border: "0.5px solid #d8eef8", borderRadius: 8, background: "#fff", color: "#6b8aa0", fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                >← رجوع</button>
+                <button
+                  type="button"
+                  disabled={!rejectReason.trim()}
+                  onClick={() => onReject(rejectReason.trim())}
+                  style={{ flex: 2, padding: "11px 0", border: "none", borderRadius: 8, background: rejectReason.trim() ? "#dc2626" : "#e2e8f0", color: rejectReason.trim() ? "#fff" : "#94a3b8", fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: rejectReason.trim() ? "pointer" : "not-allowed", transition: "all 0.15s" }}
+                >تأكيد الرفض</button>
+              </>
+            )}
           </div>
-
-          {/* Warning note */}
-          <div style={{ background: "#fffbeb", border: "1px solid #fbbf24", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 8, alignItems: "flex-start" }}>
-            <span style={{ fontSize: 16, lineHeight: 1.3 }}>⚠️</span>
-            <span style={{ fontSize: 12, color: "#92400e", fontWeight: 600, lineHeight: 1.5 }}>
-              بعد الاعتماد سيتم الإفراج عن مبلغ الضمان للمزود. هذا الإجراء لا يمكن التراجع عنه.
-            </span>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div style={{ padding: "16px 24px", borderTop: "1px solid #d8eef8", display: "flex", gap: 10, flexShrink: 0 }}>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{ flex: 1, padding: "11px 0", border: "1px solid #d8eef8", borderRadius: 8, background: "#fff", color: "#6b8aa0", fontFamily: "inherit", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-          >إلغاء</button>
-          <button
-            type="button"
-            onClick={() => onConfirm(photos.map(p => p.url), note)}
-            style={{ flex: 2, padding: "11px 0", border: "none", borderRadius: 8, background: "#16a34a", color: "#fff", fontFamily: "inherit", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
-          >✓ تأكيد الاعتماد</button>
         </div>
       </div>
-    </div>
+
+      {/* Lightbox */}
+      {lightboxSrc && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400 }}
+          onClick={() => setLightboxSrc(null)}
+        >
+          <img src={lightboxSrc} alt="عرض كامل" style={{ maxWidth: "90vw", maxHeight: "85vh", borderRadius: 8, objectFit: "contain" }} onClick={e => e.stopPropagation()} />
+          <button
+            onClick={() => setLightboxSrc(null)}
+            style={{ position: "fixed", top: 20, left: 20, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 36, height: 36, color: "#fff", cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}
+          >×</button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1159,6 +1213,12 @@ export default function ProviderTasks() {
   const [assignTarget, setAssignTarget] = useState<AssignTarget | null>(null);
   const [trackTarget, setTrackTarget] = useState<TrackTarget | null>(null);
   const [approveTarget, setApproveTarget] = useState<ApproveTarget | null>(null);
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  const showToast = (msg: string, ok: boolean) => {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   const filteredNgo = ngoTasks.filter(t => {
     if (ngoStatus !== "all" && t.status !== ngoStatus) return false;
@@ -1232,27 +1292,49 @@ export default function ProviderTasks() {
     setAssignTarget(null);
   };
 
-  const handleApproveConfirm = (photos: string[], note: string) => {
+  const handleApproveApprove = () => {
     if (!approveTarget) return;
-    const timeEntry = { label: "اعتماد التسليم", date: nowLabel(), ...(note ? { note } : {}) };
+    const timeEntry = { label: "تم التسليم ✓", date: nowLabel() };
+    console.log(`[Escrow] Released for task ${approveTarget.taskId} — party: ${approveTarget.partyName}`);
     if (approveTarget.type === "ngo") {
       setNgoTasks(prev => prev.map(t =>
         t.id === approveTarget.taskId
-          ? { ...t, deliveryApproved: true, deliveryPhotos: photos, timeline: [...t.timeline, timeEntry] }
+          ? { ...t, deliveryApproved: true, timeline: [...t.timeline, timeEntry] }
           : t
       ));
       if (selectedNgoTask?.id === approveTarget.taskId)
-        setSelectedNgoTask(prev => prev ? { ...prev, deliveryApproved: true, deliveryPhotos: photos } : null);
+        setSelectedNgoTask(prev => prev ? { ...prev, deliveryApproved: true } : null);
     } else {
       setCitTasks(prev => prev.map(t =>
         t.id === approveTarget.taskId
-          ? { ...t, deliveryApproved: true, deliveryPhotos: photos, timeline: [...t.timeline, timeEntry] }
+          ? { ...t, deliveryApproved: true, timeline: [...t.timeline, timeEntry] }
           : t
       ));
       if (selectedCitTask?.id === approveTarget.taskId)
-        setSelectedCitTask(prev => prev ? { ...prev, deliveryApproved: true, deliveryPhotos: photos } : null);
+        setSelectedCitTask(prev => prev ? { ...prev, deliveryApproved: true } : null);
     }
     setApproveTarget(null);
+    showToast("تم اعتماد التسليم بنجاح وإطلاق الضمان", true);
+  };
+
+  const handleApproveReject = (reason: string) => {
+    if (!approveTarget) return;
+    const timeEntry = { label: "تم رفض التسليم", date: nowLabel(), note: reason };
+    if (approveTarget.type === "ngo") {
+      setNgoTasks(prev => prev.map(t =>
+        t.id === approveTarget.taskId
+          ? { ...t, timeline: [...t.timeline, timeEntry] }
+          : t
+      ));
+    } else {
+      setCitTasks(prev => prev.map(t =>
+        t.id === approveTarget.taskId
+          ? { ...t, timeline: [...t.timeline, timeEntry] }
+          : t
+      ));
+    }
+    setApproveTarget(null);
+    showToast("تم رفض التسليم وإخطار السائق", false);
   };
 
   const thStyle: React.CSSProperties = {
@@ -1362,7 +1444,7 @@ export default function ProviderTasks() {
                               } else if (action === "track" && task.driver) {
                                 setTrackTarget({ label: task.tripNumber, region: task.region, quantity: task.quantityLiters, driver: task.driver, timeline: task.timeline });
                               } else if (action === "approve") {
-                                setApproveTarget({ taskId: task.id, type: "ngo", label: task.tripNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.orgName });
+                                setApproveTarget({ taskId: task.id, type: "ngo", contractType: "organization", label: task.tripNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.orgName, driverGps: [31.502, 34.471], destGps: [31.501, 34.470] });
                               } else {
                                 setSelectedNgoTask(task);
                               }
@@ -1455,7 +1537,7 @@ export default function ProviderTasks() {
                               } else if (action === "track" && task.driver) {
                                 setTrackTarget({ label: task.orderNumber, region: task.region, quantity: task.quantityLiters, driver: task.driver, timeline: task.timeline });
                               } else if (action === "approve") {
-                                setApproveTarget({ taskId: task.id, type: "citizen", label: task.orderNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.citizenName });
+                                setApproveTarget({ taskId: task.id, type: "citizen", contractType: "citizen", label: task.orderNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.citizenName, driverGps: [31.502, 34.471], destGps: [31.501, 34.470] });
                               } else {
                                 setSelectedCitTask(task);
                               }
@@ -1507,9 +1589,34 @@ export default function ProviderTasks() {
         <ApproveModal
           target={approveTarget}
           onClose={() => setApproveTarget(null)}
-          onConfirm={handleApproveConfirm}
+          onApprove={handleApproveApprove}
+          onReject={handleApproveReject}
         />
       )}
+
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 28, right: 28, zIndex: 500,
+          background: toast.ok ? "#16a34a" : "#dc2626",
+          color: "#fff", borderRadius: 10, padding: "13px 20px",
+          fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 10,
+          boxShadow: "0 4px 20px rgba(0,0,0,0.18)", minWidth: 240,
+          animation: "slideInToast 0.25s ease",
+        }}>
+          <span style={{ fontSize: 16 }}>{toast.ok ? "✓" : "✗"}</span>
+          {toast.msg}
+          <button
+            onClick={() => setToast(null)}
+            style={{ marginRight: "auto", background: "rgba(255,255,255,0.2)", border: "none", borderRadius: "50%", width: 22, height: 22, color: "#fff", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}
+          >×</button>
+        </div>
+      )}
+      <style>{`
+        @keyframes slideInToast {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }
