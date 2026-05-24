@@ -126,6 +126,9 @@ export const driversTable = pgTable(
     status: driverStatusEnum("status").notNull().default("pending"),
     phone: varchar("phone", { length: 50 }),
     vehicleType: varchar("vehicle_type", { length: 100 }),
+    fullName: varchar("full_name", { length: 200 }),
+    zone: varchar("zone", { length: 200 }),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },
@@ -133,6 +136,27 @@ export const driversTable = pgTable(
 );
 
 export type Driver = typeof driversTable.$inferSelect;
+
+// ── Provider Driver Invites ────────────────────────────────────────────────────
+
+export const providerDriverInvitesTable = pgTable(
+  "provider_driver_invites",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    fullName: varchar("full_name", { length: 200 }).notNull(),
+    phone: varchar("phone", { length: 50 }).notNull(),
+    zone: varchar("zone", { length: 200 }),
+    idNumber: varchar("id_number", { length: 100 }),
+    providerId: varchar("provider_id").notNull().references(() => providersTable.id, { onDelete: "cascade" }),
+    providerName: varchar("provider_name", { length: 200 }),
+    token: varchar("token", { length: 64 }).notNull().unique(),
+    status: varchar("status", { length: 20 }).notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_pdi_provider_id").on(t.providerId), index("idx_pdi_token").on(t.token)],
+);
+
+export type ProviderDriverInvite = typeof providerDriverInvitesTable.$inferSelect;
 
 // ── Citizens ──────────────────────────────────────────────────────────────────
 
@@ -439,6 +463,58 @@ export const paymentsTable = pgTable(
   },
   (t) => [index("idx_payments_user_id").on(t.userId), index("idx_payments_status").on(t.status)],
 );
+
+// ── Trucks ────────────────────────────────────────────────────────────────────
+
+export const truckStatusEnum = pgEnum("truck_status", ["available", "on_trip", "maintenance"]);
+
+export const trucksTable = pgTable(
+  "trucks",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    providerId: varchar("provider_id").notNull().references(() => providersTable.id, { onDelete: "cascade" }),
+    plateNumber: varchar("plate_number", { length: 30 }).notNull(),
+    model: varchar("model", { length: 100 }).notNull(),
+    capacityLiters: integer("capacity_liters").notNull(),
+    year: integer("year").notNull(),
+    status: truckStatusEnum("status").notNull().default("available"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  },
+  (t) => [index("idx_trucks_provider_id").on(t.providerId), index("idx_trucks_status").on(t.status)],
+);
+
+export type Truck = typeof trucksTable.$inferSelect;
+
+// ── Contracts ─────────────────────────────────────────────────────────────────
+
+export const contractStatusEnum = pgEnum("contract_status", ["review", "active", "rejected"]);
+export const contractPriorityEnum = pgEnum("contract_priority", ["normal", "high", "vip"]);
+
+export const contractsTable = pgTable(
+  "contracts",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    contractNumber: varchar("contract_number", { length: 20 }).notNull(),
+    providerId: varchar("provider_id").notNull().references(() => providersTable.id, { onDelete: "cascade" }),
+    clientName: varchar("client_name", { length: 255 }).notNull(),
+    priority: contractPriorityEnum("priority").notNull().default("normal"),
+    status: contractStatusEnum("status").notNull().default("review"),
+    volumeLiters: integer("volume_liters").notNull(),
+    valueAed: numeric("value_aed", { precision: 12, scale: 2 }).notNull(),
+    location: varchar("location", { length: 255 }),
+    slaHours: integer("sla_hours"),
+    notes: text("notes"),
+    startDate: timestamp("start_date", { withTimezone: true }),
+    endDate: timestamp("end_date", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  },
+  (t) => [index("idx_contracts_provider_id").on(t.providerId), index("idx_contracts_status").on(t.status)],
+);
+
+export type Contract = typeof contractsTable.$inferSelect;
 
 // ── Audit Log ─────────────────────────────────────────────────────────────────
 

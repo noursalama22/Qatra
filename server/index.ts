@@ -8,6 +8,7 @@ import {
   ngosTable, providersTable, driversTable, zonesTable,
   distributionTasksTable, deliveryOrdersTable, usersTable,
   citizensTable, signalsTable, gpsPositionsTable,
+  userRolesTable, contractsTable, trucksTable, providerDriverInvitesTable,
   userRolesTable, regionsTable, providerRegionRatesTable, ngoContractsTable,
 } from "@shared/schema";
 import { eq, count, sum, sql, desc, and } from "drizzle-orm";
@@ -704,6 +705,18 @@ app.get("/api/citizen/:citizenId/orders", async (req, res) => {
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+// ── Trucks ─────────────────────────────────────────────────────────────────
+
+app.get("/api/trucks", async (req, res) => {
+  try {
+    const providerId = req.query.providerId as string | undefined;
+    if (providerId) {
+      const data = await db.select().from(trucksTable)
+        .where(eq(trucksTable.providerId, providerId))
+        .orderBy(trucksTable.createdAt);
+      return res.json({ data, total: data.length });
+    }
+    const data = await db.select().from(trucksTable).orderBy(trucksTable.createdAt);
 // ── Regions & NGO Contracts ────────────────────────────────────────────────
 
 app.get("/api/regions", async (_req, res) => {
@@ -713,6 +726,209 @@ app.get("/api/regions", async (_req, res) => {
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+app.post("/api/trucks", async (req, res) => {
+  try {
+    const { providerId, plateNumber, model, capacityLiters, year, notes } = req.body;
+    if (!providerId || !plateNumber || !model || !capacityLiters || !year) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+    const [truck] = await db.insert(trucksTable).values({
+      providerId, plateNumber, model,
+      capacityLiters: Number(capacityLiters),
+      year: Number(year),
+      notes: notes ?? null,
+    }).returning();
+    res.status(201).json(truck);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.patch("/api/trucks/:id", async (req, res) => {
+  try {
+    const allowed = ["available", "on_trip", "maintenance"] as const;
+    const status = req.body.status;
+    if (status && !allowed.includes(status)) return res.status(400).json({ error: "Invalid status" });
+    const [updated] = await db.update(trucksTable)
+      .set({ ...(status ? { status } : {}), updatedAt: new Date() })
+      .where(eq(trucksTable.id, req.params.id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// ── Provider Notifications ──────────────────────────────────────────────────
+
+app.get("/api/provider-notifications", async (req, res) => {
+  try {
+    const providerId = req.query.providerId as string;
+    if (!providerId) return res.status(400).json({ error: "providerId required" });
+
+    const [reviewContracts, acceptedInvites] = await Promise.all([
+      db.select().from(contractsTable)
+        .where(and(eq(contractsTable.providerId, providerId), eq(contractsTable.status, "review")))
+        .orderBy(desc(contractsTable.createdAt)),
+      db.select().from(providerDriverInvitesTable)
+        .where(and(eq(providerDriverInvitesTable.providerId, providerId), eq(providerDriverInvitesTable.status, "accepted")))
+        .orderBy(desc(providerDriverInvitesTable.createdAt))
+        .limit(5),
+    ]);
+
+    const notifications = [
+      ...reviewContracts.map(c => ({
+        id: `contract-${c.id}`,
+        type: "new_contract",
+        title: "عقد جديد بانتظار موافقتك",
+        message: `${c.clientName} — ${Number(c.valueAed).toLocaleString("ar-AE")} د.إ.`,
+        entityId: c.id,
+        entityPage: "contracts",
+        priority: c.priority,
+        createdAt: c.createdAt,
+      })),
+      ...acceptedInvites.map(inv => ({
+        id: `invite-${inv.id}`,
+        type: "driver_accepted",
+        title: "قبل سائق دعوتك",
+        message: `${inv.fullName} — ${inv.phone}`,
+        entityId: inv.id,
+        entityPage: "fleet",
+        priority: "normal",
+        createdAt: inv.createdAt,
+      })),
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json({ data: notifications, total: notifications.length });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// ── Provider Driver Invitations ─────────────────────────────────────────────
+
+app.get("/api/provider-drivers", async (req, res) => {
+  try {
+    const providerId = req.query.providerId as string;
+    if (!providerId) return res.status(400).json({ error: "providerId required" });
+
+    const [realDrivers, invites] = await Promise.all([
+      db.select().from(driversTable).where(eq(driversTable.providerId, providerId)),
+      db.select().from(providerDriverInvitesTable).where(eq(providerDriverInvitesTable.providerId, providerId)),
+    ]);
+
+    const normalizedDrivers = realDrivers.map(d => ({
+      id: d.id,
+      fullName: d.fullName ?? "سائق غير مسمى",
+      phone: d.phone ?? "—",
+      zone: d.zone ?? "غير محدد",
+      status: d.status === "active" ? "active" : d.status === "inactive" ? "suspended" : "active",
+      lastActivityAt: d.lastActivityAt?.toISOString() ?? null,
+      source: "driver",
+      driverType: d.driverType,
+    }));
+
+    const normalizedInvites = invites.map(inv => ({
+      id: inv.id,
+      fullName: inv.fullName,
+      phone: inv.phone,
+      zone: inv.zone ?? "غير محدد",
+      status: inv.status === "accepted" ? "active" : inv.status === "expired" ? "suspended" : "invited",
+      lastActivityAt: null,
+      source: "invite",
+      token: inv.token,
+      inviteStatus: inv.status,
+    }));
+
+    res.json({ data: [...normalizedDrivers, ...normalizedInvites] });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post("/api/provider-driver-invites", async (req, res) => {
+  try {
+    const { fullName, phone, zone, idNumber, providerId, providerName } = req.body;
+    if (!fullName || !phone || !providerId) return res.status(400).json({ error: "fullName, phone, providerId required" });
+
+    const { randomBytes } = await import("node:crypto");
+    const token = randomBytes(32).toString("hex");
+
+    const [invite] = await db.insert(providerDriverInvitesTable).values({
+      fullName, phone, zone: zone || null, idNumber: idNumber || null,
+      providerId, providerName: providerName || null, token, status: "pending",
+    }).returning();
+
+    res.status(201).json({ ...invite, inviteLink: `${req.headers.origin ?? "https://app.qatra.ps"}/driver-invite?token=${token}` });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.get("/api/provider-driver-invites/:token", async (req, res) => {
+  try {
+    const [invite] = await db.select().from(providerDriverInvitesTable)
+      .where(eq(providerDriverInvitesTable.token, req.params.token));
+    if (!invite) return res.status(404).json({ error: "رابط الدعوة غير صالح أو منتهي الصلاحية" });
+    res.json(invite);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post("/api/provider-driver-invites/:token/accept", async (req, res) => {
+  try {
+    const [invite] = await db.select().from(providerDriverInvitesTable)
+      .where(eq(providerDriverInvitesTable.token, req.params.token));
+    if (!invite) return res.status(404).json({ error: "رابط الدعوة غير صالح" });
+    if (invite.status === "accepted") return res.status(400).json({ error: "تم قبول هذه الدعوة مسبقاً" });
+
+    await db.update(providerDriverInvitesTable)
+      .set({ status: "accepted" })
+      .where(eq(providerDriverInvitesTable.token, req.params.token));
+
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.patch("/api/provider-driver-invites/:id/status", async (req, res) => {
+  try {
+    const allowed = ["pending", "accepted", "expired"];
+    if (!allowed.includes(req.body.status)) return res.status(400).json({ error: "Invalid status" });
+    const [updated] = await db.update(providerDriverInvitesTable)
+      .set({ status: req.body.status })
+      .where(eq(providerDriverInvitesTable.id, req.params.id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// ── Contracts ──────────────────────────────────────────────────────────────
+
+app.get("/api/contracts", async (req, res) => {
+  try {
+    const providerId = req.query.providerId as string | undefined;
+    const query = db.select().from(contractsTable).orderBy(contractsTable.createdAt);
+    if (providerId) {
+      const data = await db.select().from(contractsTable)
+        .where(eq(contractsTable.providerId, providerId))
+        .orderBy(contractsTable.createdAt);
+      return res.json({ data, total: data.length });
+    }
+    const data = await query;
+    res.json({ data, total: data.length });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.get("/api/contracts/:id", async (req, res) => {
+  try {
+    const [contract] = await db.select().from(contractsTable).where(eq(contractsTable.id, req.params.id));
+    if (!contract) return res.status(404).json({ error: "Not found" });
+    res.json(contract);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.patch("/api/contracts/:id", async (req, res) => {
+  try {
+    const allowed = ["review", "active", "rejected"] as const;
+    const status = req.body.status;
+    if (status && !allowed.includes(status)) return res.status(400).json({ error: "Invalid status" });
+    const [updated] = await db.update(contractsTable)
+      .set({ ...(status ? { status } : {}), updatedAt: new Date() })
+      .where(eq(contractsTable.id, req.params.id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
 app.get("/api/regions/:regionId/providers", async (req, res) => {
   try {
     const { regionId } = req.params;

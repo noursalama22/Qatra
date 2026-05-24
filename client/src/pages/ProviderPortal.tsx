@@ -1,254 +1,367 @@
 import { useState, useEffect } from "react";
 
-type Task = { id: string; zoneId: string; status: string; quantityLiters: string; scheduledAt: string; notes: string | null };
-type Order = { id: string; citizenId: string; status: string; quantityLiters: string; totalAmount: string; createdAt: string };
-type Driver = { id: string; vehicleType: string; status: string; driverType: string; phone: string };
-type Zone = { id: string; name: string };
+type Driver = { id: string; vehicleType: string; status: string; driverType: string; phone: string; providerId: string };
+type Task = { id: string; zoneId: string; status: string; quantityLiters: string; scheduledAt: string };
+type Order = { id: string; status: string; quantityLiters: string; totalAmount: string };
 
 const DEMO_PROVIDER_ID = "seed-p1";
-const STATUS_LABELS: Record<string, string> = { pending: "مجدولة", in_progress: "جارية", delivered: "مُنجزة", cancelled: "ملغاة" };
-const ORDER_STATUS_LABELS: Record<string, string> = { pending: "معلق", dispatched: "جاري التوصيل", delivered: "مُسلَّم", cancelled: "ملغي" };
-const STATUS_COLORS: Record<string, string> = { pending: "#f59e0b", in_progress: "#0ea5e9", delivered: "#14b8a6", cancelled: "#8eb5c8", dispatched: "#38bdf8" };
 
-export default function ProviderPortal() {
-  const [tab, setTab] = useState<"ngo" | "commercial" | "drivers">("ngo");
+const CONTRACTS = [
+  {
+    id: "c1",
+    client: "منتجع ينابيع الصحراء",
+    status: "active" as const,
+    volumeLiters: 120000,
+    value: 176000,
+    from: "15/4/2025",
+    to: "15/10/2025",
+    notes: "توريد أسبوعي بكميات كبيرة. تحرير الضمان بعد كل رحلة.",
+  },
+  {
+    id: "c2",
+    client: "مزارع الوادي الأخضر",
+    status: "active" as const,
+    volumeLiters: 80000,
+    value: 117500,
+    from: "1/3/2025",
+    to: "1/9/2025",
+    notes: "توريد كل أسبوعين. جدولة مرنة.",
+  },
+  {
+    id: "c3",
+    client: "مجموعة سيتي مول",
+    status: "review" as const,
+    volumeLiters: 200000,
+    value: 275000,
+    from: "1/7/2025",
+    to: "31/12/2025",
+    notes: "حسب الطلب خلال 4 ساعات (SLA). تعرفة مميزة.",
+  },
+];
+
+const PENDING_ACTIONS = [
+  { id: "pa1", name: "شركة أكوا العالمية", amount: 460000 },
+  { id: "pa2", name: "مجموعة سيتي مول", amount: 275000 },
+  { id: "pa3", name: "مستشفى الواحة التخصصي", amount: 92000 },
+];
+
+const ACTIVE_DELIVERIES = [
+  {
+    id: "trp-001",
+    volumeK: 12,
+    from: "مركز توزيع القوز",
+    to: "منتجع ينابيع الصحراء، نخلة جميرا",
+    driver: "أحمد حسن",
+    truck: "د-44291",
+    progress: 46,
+  },
+  {
+    id: "trp-002",
+    volumeK: 10,
+    from: "محطة خزان العين",
+    to: "مزارع الوادي الأخضر، العين",
+    driver: "خالد الرشيد",
+    truck: "د-11283",
+    progress: 39,
+  },
+];
+
+function fmtAED(n: number) {
+  return n.toLocaleString("ar-AE") + " د.إ.";
+}
+
+function fmtVol(n: number) {
+  if (n >= 1000) return (n / 1000).toLocaleString("ar-AE") + " ألف لتر";
+  return n.toLocaleString("ar-AE") + " لتر";
+}
+
+type ReviewContract = {
+  id: string;
+  contractNumber: string;
+  clientName: string;
+  valueAed: string;
+  priority: string;
+};
+
+export default function ProviderPortal({ onNavigate }: { onNavigate?: (page: string) => void }) {
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [zones, setZones] = useState<Zone[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const [reviewContracts, setReviewContracts] = useState<ReviewContract[]>([]);
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
 
-  const load = async () => {
-    const [t, o, d, z] = await Promise.all([
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/drivers").then(r => r.json()),
       fetch("/api/tasks").then(r => r.json()),
       fetch("/api/orders").then(r => r.json()),
-      fetch("/api/drivers").then(r => r.json()),
-      fetch("/api/zones").then(r => r.json()),
-    ]);
-    setTasks(t.data ?? []);
-    setOrders(o.data ?? []);
-    setDrivers((d.data ?? []).filter((dr: Driver & { providerId: string }) => dr.providerId === DEMO_PROVIDER_ID));
-    setZones(z.data ?? []);
-  };
+      fetch(`/api/contracts?providerId=${DEMO_PROVIDER_ID}`).then(r => r.json()),
+    ]).then(([d, t, o, c]) => {
+      setDrivers((d.data ?? []).filter((dr: Driver) => dr.providerId === DEMO_PROVIDER_ID));
+      setTasks(t.data ?? []);
+      setOrders(o.data ?? []);
+      setReviewContracts((c.data ?? []).filter((ct: any) => ct.status === "review"));
+    });
+  }, []);
 
-  useEffect(() => { load(); }, []);
-
-  const advanceTask = async (id: string, nextStatus: string) => {
-    await fetch(`/api/tasks/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: nextStatus }) });
-    showToast(nextStatus === "in_progress" ? " تم إرسال السائق" : " تم تأكيد التسليم");
-    load();
-  };
-
-  const advanceOrder = async (id: string, nextStatus: string) => {
-    await fetch(`/api/orders/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: nextStatus }) });
-    showToast(nextStatus === "dispatched" ? " تم إرسال السائق للطلب" : " تم تأكيد التوصيل");
-    load();
-  };
-
-  const toggleDriver = async (id: string, currentStatus: string) => {
-    const newStatus = currentStatus === "active" ? "inactive" : "active";
-    await fetch(`/api/drivers/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: newStatus }) });
-    showToast(newStatus === "active" ? " تم تفعيل السائق" : " تم إيقاف السائق");
-    load();
-  };
-
-  const ngoTasks = tasks.filter(t => t.status !== "cancelled");
-  const commercialOrders = orders;
-  const activeDrivers = drivers.filter(d => d.status === "active").length;
+  const totalDrivers = Math.max(drivers.length, 5);
+  const activeDrivers = drivers.filter(d => d.status === "active").length || 3;
+  const availableDrivers = Math.max(totalDrivers - activeDrivers, 2);
+  const activeTrips = tasks.filter(t => t.status === "in_progress").length || ACTIVE_DELIVERIES.length;
+  const fleetPct = Math.round((activeDrivers / totalDrivers) * 100) || 60;
 
   return (
-    <div className="portal provider-portal" dir="rtl">
+    <div dir="rtl" style={{ background: "#f3fbff", minHeight: "100vh", padding: "28px 32px 48px" }}>
       {toast && <div className="action-toast">{toast}</div>}
 
-      <div className="portal-header" style={{ background: "linear-gradient(135deg,#0284c7,#0ea5e9)" }}>
-        <div className="portal-header-inner">
-          <div className="portal-role-badge"> مزود الخدمة</div>
-          <h2 className="portal-title">FastWater Co.</h2>
-          <p className="portal-subtitle">إنساني · تجاري · إدارة الأسطول والعمليات</p>
+      {/* ── Page Title ── */}
+      <div style={{ marginBottom: reviewContracts.length > 0 ? 16 : 24 }}>
+        <h2 style={{ fontSize: 24, fontWeight: 800, color: "#12384f", marginBottom: 4 }}>لوحة العمليات</h2>
+        <p style={{ fontSize: 13, color: "#6b8aa0" }}>نظرة فورية على العقود والأسطول وعمليات التوصيل النشطة.</p>
+      </div>
+
+      {/* ── New Contract Alert Banner ── */}
+      {reviewContracts.length > 0 && (
+        <div style={{ background: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)", border: "1px solid #fcd34d", borderRadius: 14, padding: "16px 20px", marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: "#fef3c7", border: "2px solid #f59e0b", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
+              📋
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: "#92400e" }}>
+                  {reviewContracts.length === 1 ? "عقد جديد بانتظار موافقتك" : `${reviewContracts.length} عقود بانتظار موافقتك`}
+                </span>
+                <span style={{ background: "#f59e0b", color: "white", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 20 }}>
+                  {reviewContracts.length} جديد
+                </span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {reviewContracts.map(c => (
+                  <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, background: "white", border: "1px solid #fcd34d", borderRadius: 8, padding: "5px 11px" }}>
+                    {c.priority === "vip" && <span style={{ background: "#0ea5e9", color: "white", fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 20 }}>VIP</span>}
+                    {c.priority === "high" && <span style={{ background: "#f59e0b", color: "white", fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 20 }}>أولوية</span>}
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#12384f" }}>{c.clientName}</span>
+                    <span style={{ fontSize: 11, color: "#6b8aa0" }}>—</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#0284c7" }}>{Number(c.valueAed).toLocaleString("ar-AE")} د.إ.</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate?.("contracts")}
+            style={{ background: "linear-gradient(135deg, #d97706, #f59e0b)", color: "white", border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+          >
+            مراجعة العقود ←
+          </button>
         </div>
-        <div className="portal-header-stats">
-          <div className="ph-stat"><span className="ph-val">{ngoTasks.filter(t => t.status === "in_progress").length}</span><span className="ph-lbl">مهمة جارية</span></div>
-          <div className="ph-divider" />
-          <div className="ph-stat"><span className="ph-val">{commercialOrders.filter(o => o.status === "pending").length}</span><span className="ph-lbl">طلب جديد</span></div>
-          <div className="ph-divider" />
-          <div className="ph-stat"><span className="ph-val">{activeDrivers}</span><span className="ph-lbl">سائق نشط</span></div>
+      )}
+
+      {/* ── KPI Cards ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+        {/* Card 1 - Active Contracts */}
+        <div style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 14, padding: "20px 22px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: 12, color: "#6b8aa0", fontWeight: 600 }}>العقود النشطة</span>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "#dff4ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📋</div>
+          </div>
+          <div style={{ fontSize: 36, fontWeight: 800, color: "#12384f", lineHeight: 1 }}>2</div>
+          <div style={{ fontSize: 12, color: "#6b8aa0", marginTop: 6 }}>3 بانتظار المراجعة</div>
+          <div style={{ fontSize: 12, color: "#0891b2", fontWeight: 600, marginTop: 4 }}>+٢ هذا الشهر</div>
+        </div>
+
+        {/* Card 2 - Revenue */}
+        <div style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 14, padding: "20px 22px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: 12, color: "#6b8aa0", fontWeight: 600 }}>إيرادات الأسطول</span>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "#ecfeff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>💰</div>
+          </div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: "#12384f", lineHeight: 1 }}>293,500 د.إ.</div>
+          <div style={{ fontSize: 12, color: "#6b8aa0", marginTop: 6 }}>القيمة التعاقدية السنوية</div>
+          <div style={{ fontSize: 12, color: "#0891b2", fontWeight: 600, marginTop: 4 }}>+١٢.٥٪</div>
+        </div>
+
+        {/* Card 3 - Volume */}
+        <div style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 14, padding: "20px 22px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: 12, color: "#6b8aa0", fontWeight: 600 }}>الحجم الإجمالي</span>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "#f0f9ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>💧</div>
+          </div>
+          <div style={{ fontSize: 30, fontWeight: 800, color: "#12384f", lineHeight: 1 }}>200 ألف لتر</div>
+          <div style={{ fontSize: 12, color: "#6b8aa0", marginTop: 6 }}>ضمن العقود النشطة</div>
+          <div style={{ display: "inline-block", background: "#ecfeff", color: "#0891b2", fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20, marginTop: 6 }}>ضمن المسار</div>
+        </div>
+
+        {/* Card 4 - Fleet Utilization */}
+        <div style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 14, padding: "20px 22px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: 12, color: "#6b8aa0", fontWeight: 600 }}>استخدام الأسطول</span>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "#fffbeb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🚛</div>
+          </div>
+          <div style={{ fontSize: 36, fontWeight: 800, color: "#12384f", lineHeight: 1 }}>{fleetPct}%</div>
+          <div style={{ fontSize: 12, color: "#6b8aa0", marginTop: 6 }}>{activeDrivers} من {totalDrivers} شاحنات نشطة</div>
+          <div style={{ display: "inline-block", background: "#ecfeff", color: "#0891b2", fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20, marginTop: 6 }}>طبيعي</div>
         </div>
       </div>
 
-      <div className="portal-tabs">
-        <button className={`ptab ${tab === "ngo" ? "ptab-active" : ""}`} onClick={() => setTab("ngo")}>
-           وضع إنساني {ngoTasks.filter(t => t.status === "pending").length > 0 && <span className="ptab-badge">{ngoTasks.filter(t => t.status === "pending").length}</span>}
-        </button>
-        <button className={`ptab ${tab === "commercial" ? "ptab-active" : ""}`} onClick={() => setTab("commercial")}>
-           وضع تجاري {commercialOrders.filter(o => o.status === "pending").length > 0 && <span className="ptab-badge">{commercialOrders.filter(o => o.status === "pending").length}</span>}
-        </button>
-        <button className={`ptab ${tab === "drivers" ? "ptab-active" : ""}`} onClick={() => setTab("drivers")}> الأسطول ({drivers.length})</button>
-      </div>
+      {/* ── Middle Row ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20, marginBottom: 20 }}>
 
-      <div className="portal-body">
-
-        {/* ── NGO Tasks ── */}
-        {tab === "ngo" && (
-          <>
-            <div className="mode-banner mode-banner-hum">
-              <span></span>
-              <div>
-                <div style={{ fontWeight: 700 }}>وضع العمليات الإنسانية</div>
-                <div style={{ fontSize: 12, opacity: 0.85 }}>المهام ممولة من المنظمة — المواطن لا يدفع شيئاً</div>
-              </div>
-            </div>
-            {/* ── Upcoming Agenda ── */}
-            {(() => {
-              const upcoming = ngoTasks
-                .filter(t => t.status === "pending" && new Date(t.scheduledAt) > new Date())
-                .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
-                .slice(0, 4);
-              if (!upcoming.length) return null;
-              return (
-                <div style={{ background:"linear-gradient(135deg,#0284c7,#0ea5e9)", borderRadius:14, padding:"16px 18px", marginBottom:18 }}>
-                  <div style={{ color:"rgba(255,255,255,.7)", fontSize:11, fontWeight:700, letterSpacing:.5, marginBottom:12, textTransform:"uppercase" }}>
-                     أجندة العمل القادمة
+        {/* Left - Active Deliveries */}
+        <div style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 14, overflow: "hidden" }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid #d8eef8", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "#12384f" }}>التوصيلات النشطة</span>
+            <button
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "#dff4ff", color: "#0284c7", border: "1px solid #bae6fd", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+              onClick={() => showToast("افتح تبويب الخريطة الحية من القائمة")}
+            >
+              🗺️ الخريطة الحية
+            </button>
+          </div>
+          <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+            {ACTIVE_DELIVERIES.map(trip => (
+              <div key={trip.id} style={{ border: "1px solid #e8f5fd", borderRadius: 12, padding: "16px 18px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ background: "#0ea5e9", color: "white", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>قيد النقل</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{trip.id}</span>
                   </div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                    {upcoming.map(t => {
-                      const zone = zones.find(z => z.id === t.zoneId);
-                      const dt   = new Date(t.scheduledAt);
-                      const isToday = dt.toDateString() === new Date().toDateString();
-                      return (
-                        <div key={t.id} style={{ display:"flex", alignItems:"center", gap:12, background:"rgba(255,255,255,.08)", borderRadius:10, padding:"10px 14px" }}>
-                          <div style={{ background: isToday ? "#f59e0b" : "#38bdf8", borderRadius:8, padding:"6px 10px", textAlign:"center", minWidth:46, flexShrink:0 }}>
-                            <div style={{ fontWeight:800, fontSize:18, color:"#fff", lineHeight:1 }}>{dt.getDate()}</div>
-                            <div style={{ fontSize:9, color:"rgba(255,255,255,.8)" }}>{dt.toLocaleDateString("ar-SY",{month:"short"})}</div>
-                          </div>
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ fontWeight:700, fontSize:13, color:"#fff", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                              {zone?.name ?? t.zoneId}
-                            </div>
-                            <div style={{ fontSize:11, color:"rgba(255,255,255,.6)", marginTop:2 }}>
-                               {dt.toLocaleTimeString("ar-SY",{hour:"2-digit",minute:"2-digit"})} ·  {Number(t.quantityLiters).toLocaleString()} لتر
-                            </div>
-                          </div>
-                          {isToday && <span style={{ background:"#f59e0b", color:"#fff", fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:20, whiteSpace:"nowrap" }}>اليوم!</span>}
-                        </div>
-                      );
-                    })}
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#0284c7" }}>{trip.volumeK} ألف لتر</span>
+                </div>
+                <div style={{ display: "flex", gap: 16, marginBottom: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: "#6b8aa0", marginBottom: 2 }}>من</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#12384f" }}>{trip.from}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", color: "#bae6fd", fontSize: 16 }}>←</div>
+                  <div style={{ flex: 1, textAlign: "left" }}>
+                    <div style={{ fontSize: 11, color: "#6b8aa0", marginBottom: 2 }}>إلى</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#12384f" }}>{trip.to}</div>
                   </div>
                 </div>
-              );
-            })()}
-
-            <div className="tasks-list">
-              {ngoTasks.map(t => {
-                const zone = zones.find(z => z.id === t.zoneId);
-                const color = STATUS_COLORS[t.status] ?? "#8eb5c8";
-                const canDispatch = t.status === "pending";
-                const canDeliver = t.status === "in_progress";
-                return (
-                  <div key={t.id} className="task-row task-row-interactive">
-                    <div className="task-row-status" style={{ background: color + "15", borderColor: color + "40" }}>
-                      <div className="task-status-dot" style={{ background: color }} />
-                      <span style={{ color, fontSize: 12, fontWeight: 700 }}>{STATUS_LABELS[t.status]}</span>
-                    </div>
-                    <div className="task-row-info">
-                      <div className="task-row-zone"> {zone?.name ?? t.zoneId}</div>
-                      <div className="task-row-meta">
-                         {Number(t.quantityLiters).toLocaleString()} لتر
-                        ·  {new Date(t.scheduledAt).toLocaleDateString("ar-SY")}
-                        {t.notes && <span> · {t.notes}</span>}
-                      </div>
-                    </div>
-                    <div className="task-row-actions">
-                      {canDispatch && <button className="btn btn-dispatch" onClick={() => advanceTask(t.id, "in_progress")}> إرسال</button>}
-                      {canDeliver && <button className="btn btn-delivered" onClick={() => advanceTask(t.id, "delivered")}> تأكيد التسليم</button>}
-                    </div>
-                  </div>
-                );
-              })}
-              {ngoTasks.length === 0 && <div className="empty-state">لا توجد مهام حالياً</div>}
-            </div>
-          </>
-        )}
-
-        {/* ── Commercial Orders ── */}
-        {tab === "commercial" && (
-          <>
-            <div className="mode-banner mode-banner-com">
-              <span></span>
-              <div>
-                <div style={{ fontWeight: 700 }}>وضع العمليات التجارية</div>
-                <div style={{ fontSize: 12, opacity: 0.85 }}>المواطن يدفع عبر Qatra — تستلم الدفع بعد خصم رسوم المنصة 5%</div>
-              </div>
-            </div>
-            <div className="tasks-list">
-              {commercialOrders.map(o => {
-                const color = STATUS_COLORS[o.status] ?? "#8eb5c8";
-                const canDispatch = o.status === "pending";
-                const canDeliver = o.status === "dispatched";
-                return (
-                  <div key={o.id} className="task-row task-row-interactive">
-                    <div className="task-row-status" style={{ background: color + "15", borderColor: color + "40" }}>
-                      <div className="task-status-dot" style={{ background: color }} />
-                      <span style={{ color, fontSize: 12, fontWeight: 700 }}>{ORDER_STATUS_LABELS[o.status] ?? o.status}</span>
-                    </div>
-                    <div className="task-row-info">
-                      <div className="task-row-zone"> طلب مواطن</div>
-                      <div className="task-row-meta">
-                         {Number(o.quantityLiters).toLocaleString()} لتر
-                        ·  {Number(o.totalAmount).toFixed(2)}$
-                        ·  {new Date(o.createdAt).toLocaleDateString("ar-SY")}
-                      </div>
-                    </div>
-                    <div className="task-row-actions">
-                      {canDispatch && <button className="btn btn-dispatch" onClick={() => advanceOrder(o.id, "dispatched")}> إرسال</button>}
-                      {canDeliver && <button className="btn btn-delivered" onClick={() => advanceOrder(o.id, "delivered")}> تأكيد</button>}
-                    </div>
-                  </div>
-                );
-              })}
-              {commercialOrders.length === 0 && <div className="empty-state">لا توجد طلبات تجارية</div>}
-            </div>
-          </>
-        )}
-
-        {/* ── Driver Fleet ── */}
-        {tab === "drivers" && (
-          <>
-            <div className="section-title">أسطول السائقين</div>
-            {drivers.map(d => (
-              <div key={d.id} className="driver-card">
-                <div className="driver-card-avatar" style={{ background: d.status === "active" ? "#ecfeff" : "#eef8fd", color: d.status === "active" ? "#0891b2" : "#6b8aa0" }}>
-                  {d.driverType === "owned" ? "" : ""}
+                <div style={{ display: "flex", gap: 20, marginBottom: 12, fontSize: 12, color: "#6b8aa0" }}>
+                  <span>السائق: <strong style={{ color: "#12384f" }}>{trip.driver}</strong></span>
+                  <span>الشاحنة: <strong style={{ color: "#12384f" }}>{trip.truck}</strong></span>
                 </div>
-                <div className="driver-card-info">
-                  <div className="driver-card-name">{d.vehicleType}</div>
-                  <div className="driver-card-meta">
-                    <span className={`driver-type-badge ${d.driverType === "owned" ? "dt-owned" : "dt-indep"}`}>
-                      {d.driverType === "owned" ? " تابع" : " مستقل"}
-                    </span>
-                    <span style={{ color: "#8eb5c8" }}>·</span>
-                    <span>{d.phone}</span>
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#6b8aa0", marginBottom: 5 }}>
+                    <span>تقدّم المسار</span>
+                    <span style={{ fontWeight: 700, color: "#0284c7" }}>{trip.progress}%</span>
                   </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                  <span className={`badge ${d.status === "active" ? "badge-green" : "badge-gray"}`}>{d.status === "active" ? "نشط" : "متوقف"}</span>
-                  <button
-                    className={`btn btn-sm ${d.status === "active" ? "btn-outline-red" : "btn-outline"}`}
-                    onClick={() => toggleDriver(d.id, d.status)}
-                  >
-                    {d.status === "active" ? "إيقاف" : "تفعيل"}
-                  </button>
+                  <div style={{ height: 6, background: "#e0f7ff", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${trip.progress}%`, background: "linear-gradient(90deg, #0284c7, #0ea5e9)", borderRadius: 3, transition: "width 0.5s" }} />
+                  </div>
                 </div>
               </div>
             ))}
-            <div className="invite-banner">
-              <div style={{ fontWeight: 700, marginBottom: 4 }}> دعوة سائق مستقل</div>
-              <div style={{ fontSize: 13, color: "#6b8aa0", marginBottom: 12 }}>يمكن دعوة سائقين مستقلين لمهام محددة دون ربطهم بشكل دائم بالشركة</div>
-              <button className="btn btn-outline" disabled>إرسال دعوة (قريباً)</button>
+          </div>
+        </div>
+
+        {/* Right Column */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* Fleet Status */}
+          <div style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 14 }}>
+            <div style={{ padding: "14px 18px", borderBottom: "1px solid #d8eef8" }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#12384f" }}>حالة الأسطول</span>
             </div>
-          </>
-        )}
+            <div style={{ padding: "14px 18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {[
+                { label: "السائقون المتاحون", val: `${availableDrivers} / ${totalDrivers}`, color: "#0891b2", bg: "#ecfeff" },
+                { label: "الشاحنات المتاحة", val: `${availableDrivers} / ${totalDrivers}`, color: "#0284c7", bg: "#dff4ff" },
+                { label: "الرحلات النشطة", val: `${activeTrips} / ${totalDrivers}`, color: "#0ea5e9", bg: "#e0f7ff" },
+                { label: "قيد الصيانة", val: `1 / ${totalDrivers}`, color: "#d97706", bg: "#fffbeb" },
+              ].map(item => (
+                <div key={item.label} style={{ background: item.bg, borderRadius: 10, padding: "12px 14px", textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: item.color, marginBottom: 4 }}>{item.val}</div>
+                  <div style={{ fontSize: 10, color: "#6b8aa0", fontWeight: 600, lineHeight: 1.3 }}>{item.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Pending Actions */}
+          <div style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 14, flex: 1 }}>
+            <div style={{ padding: "14px 18px", borderBottom: "1px solid #d8eef8" }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#12384f" }}>إجراءات معلّقة</span>
+            </div>
+            <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+              {PENDING_ACTIONS.map(action => (
+                <div key={action.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#f8fcff", borderRadius: 10, border: "1px solid #e8f5fd" }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#12384f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{action.name}</div>
+                    <div style={{ fontSize: 11, color: "#0284c7", fontWeight: 600 }}>{fmtAED(action.amount)}</div>
+                  </div>
+                  <button
+                    style={{ background: "#0ea5e9", color: "white", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+                    onClick={() => showToast(`مراجعة ${action.name}`)}
+                  >
+                    مراجعة
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Recent Contracts ── */}
+      <div style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 14 }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #d8eef8", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "#12384f" }}>العقود الأخيرة</span>
+          <button
+            style={{ background: "none", border: "none", color: "#0284c7", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            onClick={() => showToast("قريباً — صفحة جميع العقود")}
+          >
+            عرض الكل ←
+          </button>
+        </div>
+        <div style={{ padding: "20px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          {CONTRACTS.map(contract => (
+            <div
+              key={contract.id}
+              style={{ border: "1px solid #d8eef8", borderRadius: 12, padding: "18px", display: "flex", flexDirection: "column", gap: 10 }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#12384f" }}>{contract.client}</span>
+                <span style={{
+                  background: contract.status === "active" ? "#ecfeff" : "#fef3c7",
+                  color: contract.status === "active" ? "#0891b2" : "#d97706",
+                  fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20
+                }}>
+                  {contract.status === "active" ? "نشط" : "قيد المراجعة"}
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div style={{ background: "#f8fcff", borderRadius: 8, padding: "8px 12px" }}>
+                  <div style={{ fontSize: 10, color: "#6b8aa0", fontWeight: 600, marginBottom: 3 }}>الحجم</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{fmtVol(contract.volumeLiters)}</div>
+                </div>
+                <div style={{ background: "#f8fcff", borderRadius: 8, padding: "8px 12px" }}>
+                  <div style={{ fontSize: 10, color: "#6b8aa0", fontWeight: 600, marginBottom: 3 }}>القيمة</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#0284c7" }}>{fmtAED(contract.value)}</div>
+                </div>
+              </div>
+
+              <div style={{ background: "#f8fcff", borderRadius: 8, padding: "8px 12px" }}>
+                <div style={{ fontSize: 10, color: "#6b8aa0", fontWeight: 600, marginBottom: 3 }}>الفترة</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#31576b" }}>{contract.from} - {contract.to}</div>
+              </div>
+
+              <div style={{ fontSize: 11, color: "#6b8aa0", lineHeight: 1.6, borderTop: "1px solid #e8f5fd", paddingTop: 8 }}>
+                {contract.notes}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

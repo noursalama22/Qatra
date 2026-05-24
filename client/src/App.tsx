@@ -3,6 +3,10 @@ import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import AdminPortal from "./pages/AdminPortal";
 import NgoPortal from "./pages/NgoPortal";
 import ProviderPortal from "./pages/ProviderPortal";
+import ProviderContracts from "./pages/ProviderContracts";
+import ProviderFleet from "./pages/ProviderFleet";
+import DriverInvite from "./pages/DriverInvite";
+import NotificationBell from "./components/NotificationBell";
 import DriverPortal from "./pages/DriverPortal";
 import Citizen from "./pages/Citizen";
 import MapView from "./pages/MapView";
@@ -49,6 +53,38 @@ const ROLES: { id: Role; label: string; color: string }[] = [
 ];
 
 const REGISTER_ROLES = ROLES.filter(role => role.id === "ngo" || role.id === "provider");
+
+const ROLE_NAV: Record<Role, { id: string; label: string }[]> = {
+  admin: [
+    { id: "main", label: "لوحة الإشراف" },
+    { id: "map", label: "الخريطة الحية" },
+  ],
+  ngo: [
+    { id: "main", label: "بوابة المنظمة" },
+    { id: "map", label: "الخريطة الحية" },
+  ],
+  provider: [
+    { id: "main", label: "لوحة التحكم" },
+    { id: "contracts", label: "العقود" },
+    { id: "fleet", label: "إدارة السائقين" },
+    { id: "map", label: "الخريطة الحية" },
+  ],
+  driver: [
+    { id: "main", label: "مهامي" },
+    { id: "map", label: "خريطة الطريق" },
+  ],
+  citizen: [
+    { id: "main", label: "بوابة المواطن" },
+  ],
+};
+
+const ROLE_DESCRIPTIONS: Record<Role, string> = {
+  admin: "موافقة على الأطراف · إعدادات النظام",
+  ngo: "مناطق التغطية · مهام التوزيع",
+  provider: "وضع إنساني + تجاري · إدارة الأسطول",
+  driver: "تنفيذ التوصيل · دليل الاستلام",
+  citizen: "إشارة الاحتياج · الطلبات التجارية",
+};
 
 const emptyAuthForm = (): AuthForm => ({
   role: "ngo",
@@ -311,6 +347,139 @@ export default function App() {
       .finally(() => setAuthLoading(false));
   }, []);
 
+  useEffect(() => {
+    Promise.all([
+      api.get<{ data: Zone[] }>("/zones").then(res => setZones(res.data)).catch(() => undefined),
+      api.get<{ data: Provider[] }>("/providers").then(res => setProviders(res.data.filter(provider => provider.status === "approved"))).catch(() => undefined),
+    ]);
+  }, []);
+
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, []);
+
+  const roleFieldsOptions = useMemo(() => ({ zones, providers }), [zones, providers]);
+
+  const renderPage = () => {
+    if (page === "map") return <MapView />;
+    if (role === "provider" && page === "contracts") return <ProviderContracts />;
+    if (role === "provider" && page === "fleet") return <ProviderFleet />;
+    switch (role) {
+      case "admin": return <AdminPortal />;
+      case "ngo": return <NgoPortal />;
+      case "provider": return <ProviderPortal onNavigate={p => setPage(p as any)} />;
+      case "driver": return <DriverPortal />;
+      case "citizen": return <Citizen />;
+    }
+  };
+
+  const openProfile = () => {
+    if (!user) return;
+    setMenuOpen(false);
+    setProfileError(null);
+    setProfileDraft(getProfileDraft(user));
+    setProfileOpen(true);
+  };
+
+  const logout = async () => {
+    setMenuOpen(false);
+    setProfileOpen(false);
+    await api.post("/auth/logout", {});
+    setUser(null);
+    setPage("main");
+  };
+
+  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user) return;
+    setSavingProfile(true);
+    setProfileError(null);
+    try {
+      const updated = await api.patch<AuthUser>("/auth/me", profileDraft);
+      setUser(updated);
+      setProfileOpen(false);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "تعذر حفظ التغييرات");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  if (window.location.pathname.startsWith("/driver-invite")) return <DriverInvite />;
+  if (authLoading) return <div className="loading auth-loading"><div className="spinner" /><p>جارٍ تحميل الجلسة...</p></div>;
+  if (!user) return <AuthScreen onAuth={setUser} />;
+
+  return (
+    <div className="layout" dir="rtl">
+      <aside className="sidebar">
+        <div className="sidebar-logo">
+          <h1>Qatra v3</h1>
+          <span>منصة توزيع المياه</span>
+        </div>
+
+        <div className="current-role-info role-info-fixed" style={{ borderColor: currentRole.color + "22" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+            <span style={{ fontWeight: 700, fontSize: 13, color: currentRole.color }}>{currentRole.label}</span>
+            <span className={statusClass}>{roleStatusLabel(user.roleStatus)}</span>
+          </div>
+          <div style={{ fontSize: 11, color: "#6b8aa0", lineHeight: 1.4 }}>{ROLE_DESCRIPTIONS[role]}</div>
+        </div>
+
+        <nav className="sidebar-nav" style={{ marginTop: 8 }}>
+          {ROLE_NAV[role].map(item => (
+            <button
+              key={item.id}
+              className={`nav-item ${page === item.id ? "active" : ""}`}
+              onClick={() => setPage(item.id as "main" | "map" | "contracts" | "fleet")}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div style={{ marginTop: "auto", padding: "16px 20px", borderTop: "1px solid #d8eef8" }}>
+          <div style={{ fontSize: 11, color: "#6b8aa0", marginBottom: 2 }}>جلسة نشطة</div>
+          <div style={{ fontSize: 11, color: "#8eb5c8" }}>{user.email}</div>
+        </div>
+      </aside>
+
+      <div className="main" style={page === "map" ? { display: "flex", flexDirection: "column" } : {}}>
+        <header className="app-header">
+          <div>
+            <h2>{page === "map" ? "الخريطة الحية" : currentRole.label}</h2>
+            <span>{ROLE_DESCRIPTIONS[role]}</span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {role === "provider" && (
+              <NotificationBell onNavigate={p => setPage(p as any)} />
+            )}
+
+          <div className="user-menu" ref={menuRef}>
+            <button className="user-menu-trigger" onClick={() => setMenuOpen(open => !open)} aria-haspopup="menu" aria-expanded={menuOpen}>
+              <span className="avatar" style={{ background: currentRole.color }}>{initials}</span>
+              <span className="user-menu-copy">
+                <strong>{displayName}</strong>
+                <small>{currentRole.label} · {roleStatusLabel(user.roleStatus)}</small>
+              </span>
+              <span className="user-menu-chevron">⌄</span>
+            </button>
+
+            {menuOpen && (
+              <div className="user-dropdown" role="menu">
+                <button onClick={openProfile} role="menuitem">إعدادات الملف الشخصي</button>
+                <button onClick={logout} role="menuitem">تسجيل الخروج</button>
+              </div>
+            )}
+          </div>
+          </div>
+        </header>
+
+        {renderPage()}
   if (authLoading) {
     return (
       <div className="loading auth-loading">

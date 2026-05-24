@@ -1,0 +1,126 @@
+Build a complete “Driver Management” module inside a Service Provider dashboard for a smart water distribution system.
+
+🧩 Context:
+
+This is part of a web app (React or Next.js). The Service Provider needs to manage drivers working under their organization.
+
+The module must include:
+
+1. Drivers List Page
+
+Create a clean dashboard page that shows all drivers belonging to the logged-in Service Provider.
+
+Each driver card/table row must display:
+
+Full Name
+Phone Number
+Zone
+Status (Invited, Active, Suspended)
+Last Activity (if available)
+Actions buttons:
+View Details
+Resend Invite (if invited)
+Disable / Activate driver
+
+Include:
+
+Search bar (by name or phone)
+Filter by status
+Filter by zone
+2. Invite Driver Feature (IMPORTANT)
+
+Add a button: “+ Invite Driver”
+
+When clicked, open a modal form with:
+
+Required fields:
+Full Name
+Phone Number
+Zone (dropdown or text)
+Optional fields:
+ID Number
+Driver License Upload (file input)
+System fields (hidden):
+providerId (from logged-in user)
+status = "invited"
+inviteToken (auto-generated unique token)
+3. Invitation System Logic
+
+When a driver is invited:
+
+Create a driver record with status = "invited"
+Generate a unique invite token
+Store invitation in database
+
+Simulate sending invitation (no real SMS required):
+
+Show success message:
+"Invitation sent successfully to phone number"
+
+Also generate an invite link like:
+https://app.com/driver-invite?token=XXXX
+
+4. Driver Acceptance Page (NEW PAGE)
+
+Create a separate public page:
+
+/driver-invite?token=XXXX
+
+This page should:
+
+Validate token
+Show invitation details (Provider name + message)
+Allow driver to register:
+Full Name (pre-filled if possible)
+Password
+Confirm Password
+Button: "Accept Invitation"
+
+On submit:
+
+Update driver status to "active"
+Link driver to providerId
+Mark invite as accepted
+5. Database Structure (use mock or Firebase-ready schema)
+
+Driver:
+
+id
+fullName
+phone
+zone
+status (invited | active | suspended)
+providerId
+createdAt
+lastActivity
+
+Invite:
+
+id
+phone
+token
+providerId
+status (pending | accepted | expired)
+createdAt
+6. UI/UX Requirements
+Clean modern dashboard UI
+Responsive design (mobile + desktop)
+Use cards or table layout
+Use modal for invite form
+Show status badges with colors:
+Invited = yellow
+Active = green
+Suspended = red
+7. Tech Notes
+Use React or Next.js
+Use dummy data if backend is not available
+Keep code modular (components folder)
+Ensure clean separation between UI and logic
+🎯 Goal:
+
+A fully working Driver Management system inside a Service Provider dashboard including:
+
+List drivers
+Invite drivers via phone
+Generate invite links
+Driver onboarding acceptance flow
