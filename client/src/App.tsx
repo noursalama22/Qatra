@@ -4,6 +4,7 @@ import NgoPortal from "./pages/NgoPortal";
 import ProviderPortal from "./pages/ProviderPortal";
 import ProviderContracts from "./pages/ProviderContracts";
 import ProviderFleet from "./pages/ProviderFleet";
+import DriverInvite from "./pages/DriverInvite";
 import DriverPortal from "./pages/DriverPortal";
 import Citizen from "./pages/Citizen";
 import MapView from "./pages/MapView";
@@ -398,6 +399,7 @@ export default function App() {
     }
   };
 
+  if (window.location.pathname.startsWith("/driver-invite")) return <DriverInvite />;
   if (authLoading) return <div className="loading auth-loading"><div className="spinner" /><p>جارٍ تحميل الجلسة...</p></div>;
   if (!user) return <AuthScreen onAuth={setUser} />;
 

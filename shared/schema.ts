@@ -125,6 +125,9 @@ export const driversTable = pgTable(
     status: driverStatusEnum("status").notNull().default("pending"),
     phone: varchar("phone", { length: 50 }),
     vehicleType: varchar("vehicle_type", { length: 100 }),
+    fullName: varchar("full_name", { length: 200 }),
+    zone: varchar("zone", { length: 200 }),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },
@@ -132,6 +135,27 @@ export const driversTable = pgTable(
 );
 
 export type Driver = typeof driversTable.$inferSelect;
+
+// ── Provider Driver Invites ────────────────────────────────────────────────────
+
+export const providerDriverInvitesTable = pgTable(
+  "provider_driver_invites",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    fullName: varchar("full_name", { length: 200 }).notNull(),
+    phone: varchar("phone", { length: 50 }).notNull(),
+    zone: varchar("zone", { length: 200 }),
+    idNumber: varchar("id_number", { length: 100 }),
+    providerId: varchar("provider_id").notNull().references(() => providersTable.id, { onDelete: "cascade" }),
+    providerName: varchar("provider_name", { length: 200 }),
+    token: varchar("token", { length: 64 }).notNull().unique(),
+    status: varchar("status", { length: 20 }).notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_pdi_provider_id").on(t.providerId), index("idx_pdi_token").on(t.token)],
+);
+
+export type ProviderDriverInvite = typeof providerDriverInvitesTable.$inferSelect;
 
 // ── Citizens ──────────────────────────────────────────────────────────────────
 

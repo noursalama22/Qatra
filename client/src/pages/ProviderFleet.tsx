@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 
 type TruckStatus = "available" | "on_trip" | "maintenance";
-type DriverStatus = "active" | "inactive" | "pending" | "rejected";
+type DriverStatus = "active" | "invited" | "suspended";
 
 type Truck = {
   id: string;
@@ -13,15 +13,21 @@ type Truck = {
   notes: string | null;
 };
 
-type Driver = {
+type DriverEntry = {
   id: string;
-  phone: string | null;
-  vehicleType: string | null;
+  fullName: string;
+  phone: string;
+  zone: string;
   status: DriverStatus;
-  driverType: "owned" | "independent";
+  lastActivityAt: string | null;
+  source: "driver" | "invite";
+  token?: string;
+  inviteStatus?: string;
+  driverType?: string;
 };
 
 const DEMO_PROVIDER_ID = "seed-p1";
+const DEMO_PROVIDER_NAME = "مياه الجنوب";
 
 const TRUCK_STATUS: Record<TruckStatus, { label: string; bg: string; color: string; dot: string }> = {
   available:   { label: "متاحة",   bg: "#ecfeff", color: "#0891b2", dot: "#0891b2" },
@@ -29,14 +35,27 @@ const TRUCK_STATUS: Record<TruckStatus, { label: string; bg: string; color: stri
   maintenance: { label: "صيانة",   bg: "#fef3c7", color: "#d97706", dot: "#f59e0b" },
 };
 
-const DRIVER_STATUS: Record<DriverStatus, { label: string; bg: string; color: string }> = {
-  active:   { label: "نشط",              bg: "#ecfeff", color: "#0891b2" },
-  inactive: { label: "غير نشط",          bg: "#f1f5f9", color: "#6b8aa0" },
-  pending:  { label: "بانتظار الموافقة", bg: "#fef3c7", color: "#d97706" },
-  rejected: { label: "مرفوض",           bg: "#fee2e2", color: "#dc2626" },
+const DRIVER_STATUS: Record<DriverStatus, { label: string; bg: string; color: string; dot: string }> = {
+  active:    { label: "نشط",        bg: "#ecfeff", color: "#0891b2", dot: "#0891b2" },
+  invited:   { label: "مدعو",       bg: "#fef3c7", color: "#d97706", dot: "#f59e0b" },
+  suspended: { label: "موقوف",      bg: "#fee2e2", color: "#dc2626", dot: "#dc2626" },
 };
 
 type TruckModal = Truck & { _open: true };
+
+type InviteResult = {
+  fullName: string;
+  phone: string;
+  token: string;
+  inviteLink: string;
+};
+
+function fmtDate(d: string | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("ar-AE", { day: "2-digit", month: "long", year: "numeric" });
+}
+
+// ── Truck Detail Modal ──────────────────────────────────────────────────────
 
 function TruckDetail({ truck, onClose, onStatusChange }: {
   truck: TruckModal;
@@ -59,23 +78,16 @@ function TruckDetail({ truck, onClose, onStatusChange }: {
   };
 
   return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(3px)" }}
-      onClick={onClose}
-    >
-      <div
-        style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 460, overflow: "hidden", display: "flex", flexDirection: "column" }}
-        onClick={e => e.stopPropagation()}
-      >
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(3px)" }} onClick={onClose}>
+      <div style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 460, overflow: "hidden" }} onClick={e => e.stopPropagation()}>
         <div style={{ background: "linear-gradient(135deg, #0f3d5c 0%, #0284c7 100%)", padding: "22px 24px", color: "white", position: "relative" }}>
           <button onClick={onClose} style={{ position: "absolute", top: 14, left: 14, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 30, height: 30, color: "white", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
           <div style={{ fontSize: 28, marginBottom: 8 }}>🚛</div>
           <h3 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 4px" }}>{truck.plateNumber}</h3>
           <p style={{ fontSize: 13, opacity: 0.8, margin: 0 }}>{truck.model}</p>
         </div>
-
-        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
             {[
               { label: "الحالة", value: st.label, color: st.color },
               { label: "السعة", value: truck.capacityLiters >= 1000 ? `${truck.capacityLiters / 1000} ألف لتر` : `${truck.capacityLiters} لتر` },
@@ -87,25 +99,16 @@ function TruckDetail({ truck, onClose, onStatusChange }: {
               </div>
             ))}
           </div>
-          {truck.notes && (
-            <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "12px 14px", fontSize: 13, color: "#31576b", lineHeight: 1.6 }}>
-              {truck.notes}
-            </div>
-          )}
-
+          {truck.notes && <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "12px 14px", fontSize: 13, color: "#31576b", lineHeight: 1.6 }}>{truck.notes}</div>}
           <div>
-            <div style={{ fontSize: 11, color: "#6b8aa0", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>تغيير الحالة</div>
+            <div style={{ fontSize: 11, color: "#6b8aa0", fontWeight: 700, marginBottom: 8 }}>تغيير الحالة</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
               {(["available", "on_trip", "maintenance"] as TruckStatus[]).map(s => {
                 const cfg = TRUCK_STATUS[s];
                 const active = truck.status === s;
                 return (
-                  <button
-                    key={s}
-                    onClick={() => !active && changeStatus(s)}
-                    disabled={saving || active}
-                    style={{ padding: "9px 0", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: active ? "default" : "pointer", border: `1px solid ${active ? cfg.dot : "#d8eef8"}`, background: active ? cfg.bg : "white", color: active ? cfg.color : "#6b8aa0", transition: "all 0.15s" }}
-                  >{cfg.label}</button>
+                  <button key={s} onClick={() => !active && changeStatus(s)} disabled={saving || active}
+                    style={{ padding: "9px 0", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: active ? "default" : "pointer", border: `1px solid ${active ? cfg.dot : "#d8eef8"}`, background: active ? cfg.bg : "white", color: active ? cfg.color : "#6b8aa0" }}>{cfg.label}</button>
                 );
               })}
             </div>
@@ -116,84 +119,68 @@ function TruckDetail({ truck, onClose, onStatusChange }: {
   );
 }
 
-type RegisterModal = { open: true };
+// ── Invite Driver Modal ─────────────────────────────────────────────────────
 
-function RegisterTruckModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ plateNumber: "", model: "", capacityLiters: "", year: new Date().getFullYear().toString(), notes: "" });
+function InviteDriverModal({ onClose, onSent }: { onClose: () => void; onSent: (result: InviteResult) => void }) {
+  const [form, setForm] = useState({ fullName: "", phone: "", zone: "", idNumber: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.plateNumber || !form.model || !form.capacityLiters) { setError("رقم اللوحة والموديل والسعة مطلوبة"); return; }
-    setSaving(true);
-    setError(null);
+    if (!form.fullName.trim()) { setError("الاسم الكامل مطلوب"); return; }
+    if (!form.phone.trim()) { setError("رقم الهاتف مطلوب"); return; }
+    setSaving(true); setError(null);
     try {
-      const res = await fetch("/api/trucks", {
+      const res = await fetch("/api/provider-driver-invites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          providerId: DEMO_PROVIDER_ID,
-          plateNumber: form.plateNumber,
-          model: form.model,
-          capacityLiters: parseInt(form.capacityLiters) * 1000,
-          year: parseInt(form.year),
-          notes: form.notes || null,
-        }),
+        body: JSON.stringify({ fullName: form.fullName, phone: form.phone, zone: form.zone || null, idNumber: form.idNumber || null, providerId: DEMO_PROVIDER_ID, providerName: DEMO_PROVIDER_NAME }),
       });
-      if (!res.ok) throw new Error("فشل التسجيل");
-      onSaved();
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+      const data = await res.json();
+      onSent({ fullName: data.fullName, phone: data.phone, token: data.token, inviteLink: data.inviteLink });
       onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "خطأ غير متوقع");
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { setError(e instanceof Error ? e.message : "خطأ غير متوقع"); }
+    finally { setSaving(false); }
   };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(3px)" }} onClick={onClose}>
-      <form style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 440, padding: "28px 28px 24px", display: "flex", flexDirection: "column", gap: 14 }} onClick={e => e.stopPropagation()} onSubmit={submit}>
+      <form style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 460, padding: "28px 28px 24px", display: "flex", flexDirection: "column", gap: 14 }} onClick={e => e.stopPropagation()} onSubmit={submit}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-          <h3 style={{ fontSize: 17, fontWeight: 800, color: "#12384f", margin: 0 }}>تسجيل شاحنة جديدة</h3>
+          <div>
+            <h3 style={{ fontSize: 17, fontWeight: 800, color: "#12384f", margin: "0 0 2px" }}>دعوة سائق جديد</h3>
+            <p style={{ fontSize: 12, color: "#6b8aa0", margin: 0 }}>سيصله رابط لقبول الانضمام وتفعيل حسابه.</p>
+          </div>
           <button type="button" onClick={onClose} style={{ background: "#f0f9ff", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", fontSize: 16, color: "#6b8aa0", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
         </div>
 
-        {[
-          { label: "رقم اللوحة", key: "plateNumber", placeholder: "مثال: د-44291" },
-          { label: "الموديل", key: "model", placeholder: "مثال: فولفو FM 420" },
-          { label: "السعة (ألف لتر)", key: "capacityLiters", placeholder: "مثال: 12", type: "number" },
-          { label: "سنة الصنع", key: "year", placeholder: "مثال: 2023", type: "number" },
-        ].map(field => (
-          <div key={field.key}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b8aa0", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.4 }}>{field.label}</label>
-            <input
-              type={field.type ?? "text"}
-              value={(form as any)[field.key]}
-              onChange={e => setForm(f => ({ ...f, [field.key]: e.target.value }))}
-              placeholder={field.placeholder}
-              style={{ width: "100%", padding: "10px 12px", border: "1px solid #d8eef8", borderRadius: 9, fontSize: 14, fontFamily: "inherit", outline: "none", direction: "rtl", background: "#fafcff" }}
-            />
-          </div>
-        ))}
-
-        <div>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b8aa0", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.4 }}>ملاحظات (اختياري)</label>
-          <textarea
-            value={form.notes}
-            onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-            placeholder="أي ملاحظات إضافية عن الشاحنة..."
-            rows={2}
-            style={{ width: "100%", padding: "10px 12px", border: "1px solid #d8eef8", borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none", resize: "vertical", direction: "rtl", background: "#fafcff" }}
-          />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {[
+            { label: "الاسم الكامل *", key: "fullName", placeholder: "مثال: محمد أحمد", full: true },
+            { label: "رقم الهاتف *", key: "phone", placeholder: "مثال: +970-599-000-000" },
+            { label: "المنطقة", key: "zone", placeholder: "مثال: خان يونس" },
+            { label: "رقم الهوية (اختياري)", key: "idNumber", placeholder: "رقم الهوية الوطنية" },
+          ].map(f => (
+            <div key={f.key} style={f.full ? { gridColumn: "1 / -1" } : {}}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b8aa0", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.4 }}>{f.label}</label>
+              <input
+                value={(form as any)[f.key]}
+                onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                placeholder={f.placeholder}
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d8eef8", borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none", direction: "rtl", background: "#fafcff" }}
+              />
+            </div>
+          ))}
         </div>
 
         {error && <div style={{ background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 8, padding: "9px 12px", fontSize: 12, fontWeight: 700 }}>{error}</div>}
 
-        <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+        <div style={{ display: "flex", gap: 10 }}>
           <button type="button" onClick={onClose} style={{ flex: 1, padding: "11px 0", borderRadius: 10, background: "white", color: "#6b8aa0", border: "1px solid #d8eef8", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>إلغاء</button>
           <button type="submit" disabled={saving} style={{ flex: 2, padding: "11px 0", borderRadius: 10, background: "linear-gradient(135deg,#0284c7,#0ea5e9)", color: "white", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-            {saving ? "جارٍ التسجيل..." : "تسجيل الشاحنة"}
+            {saving ? "جارٍ الإرسال..." : "إرسال الدعوة 📤"}
           </button>
         </div>
       </form>
@@ -201,31 +188,70 @@ function RegisterTruckModal({ onClose, onSaved }: { onClose: () => void; onSaved
   );
 }
 
+// ── Invite Success Modal ────────────────────────────────────────────────────
+
+function InviteSuccessModal({ result, onClose }: { result: InviteResult; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => { navigator.clipboard.writeText(result.inviteLink); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 210, backdropFilter: "blur(3px)" }} onClick={onClose}>
+      <div style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 440, padding: "32px 28px", display: "flex", flexDirection: "column", gap: 16, textAlign: "center" }} onClick={e => e.stopPropagation()}>
+        <div style={{ width: 60, height: 60, borderRadius: "50%", background: "linear-gradient(135deg, #0284c7, #0ea5e9)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", fontSize: 26 }}>✅</div>
+        <div>
+          <h3 style={{ fontSize: 18, fontWeight: 800, color: "#12384f", margin: "0 0 4px" }}>تم إرسال الدعوة بنجاح!</h3>
+          <p style={{ fontSize: 13, color: "#6b8aa0", margin: 0 }}>تمت دعوة <strong>{result.fullName}</strong> على الرقم <strong>{result.phone}</strong></p>
+        </div>
+        <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "14px 16px" }}>
+          <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, marginBottom: 6, textAlign: "right" }}>رابط القبول</div>
+          <div style={{ fontSize: 11, color: "#12384f", wordBreak: "break-all", direction: "ltr", textAlign: "left", lineHeight: 1.5, marginBottom: 10, background: "white", padding: "8px 10px", borderRadius: 7, border: "1px solid #d8eef8" }}>{result.inviteLink}</div>
+          <button onClick={copy} style={{ width: "100%", padding: "8px 0", borderRadius: 8, background: copied ? "#ecfeff" : "#0ea5e9", color: copied ? "#0891b2" : "white", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            {copied ? "✅ تم النسخ!" : "📋 نسخ الرابط"}
+          </button>
+        </div>
+        <button onClick={onClose} style={{ padding: "11px 0", borderRadius: 10, background: "#f8fcff", color: "#0284c7", border: "1px solid #bae6fd", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>إغلاق</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ───────────────────────────────────────────────────────────────
+
 export default function ProviderFleet() {
   const [tab, setTab] = useState<"trucks" | "drivers">("trucks");
   const [trucks, setTrucks] = useState<Truck[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [drivers, setDrivers] = useState<DriverEntry[]>([]);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<DriverStatus | "all">("all");
+  const [zoneFilter, setZoneFilter] = useState("all");
   const [detail, setDetail] = useState<TruckModal | null>(null);
-  const [registerOpen, setRegisterOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadTrucks = () =>
-    fetch(`/api/trucks?providerId=${DEMO_PROVIDER_ID}`).then(r => r.json()).then(d => setTrucks(d.data ?? []));
-
-  const loadDrivers = () =>
-    fetch("/api/drivers").then(r => r.json()).then(d =>
-      setDrivers((d.data ?? []).filter((dr: Driver & { providerId: string }) => dr.providerId === DEMO_PROVIDER_ID))
-    );
+  const loadTrucks = () => fetch(`/api/trucks?providerId=${DEMO_PROVIDER_ID}`).then(r => r.json()).then(d => setTrucks(d.data ?? []));
+  const loadDrivers = () => fetch(`/api/provider-drivers?providerId=${DEMO_PROVIDER_ID}`).then(r => r.json()).then(d => setDrivers(d.data ?? []));
 
   useEffect(() => {
     setLoading(true);
     Promise.all([loadTrucks(), loadDrivers()]).finally(() => setLoading(false));
   }, []);
 
-  const handleStatusChange = (id: string, status: TruckStatus) => {
-    setTrucks(prev => prev.map(t => t.id === id ? { ...t, status } : t));
+  const handleTruckStatusChange = (id: string, status: TruckStatus) => setTrucks(prev => prev.map(t => t.id === id ? { ...t, status } : t));
+
+  const handleDriverAction = async (driver: DriverEntry, action: "resend" | "activate" | "suspend") => {
+    if (action === "resend" && driver.source === "invite" && driver.token) {
+      const link = `${window.location.origin}/driver-invite?token=${driver.token}`;
+      setInviteResult({ fullName: driver.fullName, phone: driver.phone, token: driver.token!, inviteLink: link });
+    } else if (action === "activate" && driver.source === "invite") {
+      await fetch(`/api/provider-driver-invites/${driver.id}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "accepted" }) });
+      await loadDrivers();
+    } else if (action === "suspend" && driver.source === "invite") {
+      await fetch(`/api/provider-driver-invites/${driver.id}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "expired" }) });
+      await loadDrivers();
+    }
   };
+
+  const zones = [...new Set(drivers.map(d => d.zone).filter(z => z && z !== "غير محدد"))];
 
   const filteredTrucks = trucks.filter(t => {
     const q = search.toLowerCase();
@@ -234,70 +260,89 @@ export default function ProviderFleet() {
 
   const filteredDrivers = drivers.filter(d => {
     const q = search.toLowerCase();
-    return !q || (d.phone ?? "").includes(q) || (d.vehicleType ?? "").toLowerCase().includes(q);
+    const matchSearch = !q || d.fullName.toLowerCase().includes(q) || d.phone.includes(q);
+    const matchStatus = statusFilter === "all" || d.status === statusFilter;
+    const matchZone = zoneFilter === "all" || d.zone === zoneFilter;
+    return matchSearch && matchStatus && matchZone;
   });
 
   const availableCount   = trucks.filter(t => t.status === "available").length;
   const onTripCount      = trucks.filter(t => t.status === "on_trip").length;
   const maintenanceCount = trucks.filter(t => t.status === "maintenance").length;
   const activeDrivers    = drivers.filter(d => d.status === "active").length;
+  const invitedDrivers   = drivers.filter(d => d.status === "invited").length;
 
   return (
     <div dir="rtl" style={{ background: "#f3fbff", minHeight: "100vh", padding: "28px 36px 48px" }}>
 
-      {/* ── Page Header ── */}
-      <div style={{ marginBottom: 24 }}>
+      {/* ── Header ── */}
+      <div style={{ marginBottom: 22 }}>
         <h2 style={{ fontSize: 24, fontWeight: 800, color: "#12384f", marginBottom: 4 }}>الأسطول والكوادر</h2>
         <p style={{ fontSize: 13, color: "#6b8aa0" }}>سجّل الشاحنات، أدر حسابات السائقين، وتابع جاهزية الأسطول.</p>
       </div>
 
-      {/* ── Summary Bar ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 24 }}>
+      {/* ── KPI Strip ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 22 }}>
         {[
-          { label: "شاحنات متاحة",   value: availableCount,   icon: "✅", bg: "#ecfeff",  color: "#0891b2" },
-          { label: "في رحلة",         value: onTripCount,      icon: "🚛", bg: "#dff4ff",  color: "#0284c7" },
-          { label: "قيد الصيانة",    value: maintenanceCount, icon: "🔧", bg: "#fef3c7",  color: "#d97706" },
-          { label: "سائقون نشطون",   value: activeDrivers,    icon: "👤", bg: "#f0f9ff",  color: "#0369a1" },
+          { label: "شاحنات متاحة",  value: availableCount,   icon: "✅", bg: "#ecfeff",  color: "#0891b2" },
+          { label: "في رحلة",        value: onTripCount,      icon: "🚛", bg: "#dff4ff",  color: "#0284c7" },
+          { label: "قيد الصيانة",   value: maintenanceCount, icon: "🔧", bg: "#fef3c7",  color: "#d97706" },
+          { label: "سائقون نشطون",  value: activeDrivers,    icon: "👤", bg: "#f0f9ff",  color: "#0369a1" },
+          { label: "دعوات معلقة",   value: invitedDrivers,   icon: "📤", bg: "#fef9ec",  color: "#b45309" },
         ].map(stat => (
-          <div key={stat.label} style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: stat.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{stat.icon}</div>
+          <div key={stat.label} style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: stat.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{stat.icon}</div>
             <div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: stat.color, lineHeight: 1 }}>{stat.value}</div>
-              <div style={{ fontSize: 12, color: "#6b8aa0", marginTop: 3 }}>{stat.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: stat.color, lineHeight: 1 }}>{stat.value}</div>
+              <div style={{ fontSize: 11, color: "#6b8aa0", marginTop: 2 }}>{stat.label}</div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* ── Tab Bar + Controls ── */}
-      <div style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 14, overflow: "hidden", marginBottom: 20 }}>
+      {/* ── Main Card ── */}
+      <div style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 14, overflow: "hidden" }}>
+
+        {/* Tab Bar */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", borderBottom: "1px solid #d8eef8" }}>
           <div style={{ display: "flex" }}>
             {([["trucks", `الشاحنات (${trucks.length})`], ["drivers", `السائقون (${drivers.length})`]] as const).map(([id, label]) => (
-              <button
-                key={id}
-                onClick={() => { setTab(id); setSearch(""); }}
-                style={{ padding: "14px 20px", fontSize: 14, fontWeight: 600, border: "none", background: "none", cursor: "pointer", color: tab === id ? "#0284c7" : "#6b8aa0", borderBottom: tab === id ? "2px solid #0284c7" : "2px solid transparent", transition: "all 0.15s" }}
-              >{label}</button>
+              <button key={id} onClick={() => { setTab(id); setSearch(""); setStatusFilter("all"); setZoneFilter("all"); }}
+                style={{ padding: "14px 20px", fontSize: 14, fontWeight: 600, border: "none", background: "none", cursor: "pointer", color: tab === id ? "#0284c7" : "#6b8aa0", borderBottom: tab === id ? "2px solid #0284c7" : "2px solid transparent", transition: "all 0.15s" }}>{label}</button>
             ))}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0" }}>
             <div style={{ position: "relative" }}>
               <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "#8eb5c8", fontSize: 14 }}>🔍</span>
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="ابحث برقم اللوحة أو المعرّف..."
-                style={{ padding: "8px 32px 8px 12px", border: "1px solid #d8eef8", borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none", width: 240, direction: "rtl" }}
-              />
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder={tab === "trucks" ? "ابحث برقم اللوحة أو الموديل..." : "ابحث بالاسم أو الهاتف..."}
+                style={{ padding: "8px 32px 8px 12px", border: "1px solid #d8eef8", borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none", width: 230, direction: "rtl" }} />
             </div>
-            {tab === "trucks" && (
-              <button
-                onClick={() => setRegisterOpen(true)}
-                style={{ display: "flex", alignItems: "center", gap: 6, background: "linear-gradient(135deg,#0284c7,#0ea5e9)", color: "white", border: "none", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                ＋ تسجيل شاحنة
-              </button>
+
+            {tab === "drivers" && (
+              <>
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}
+                  style={{ padding: "8px 12px", border: "1px solid #d8eef8", borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none", color: "#12384f", background: "white", direction: "rtl" }}>
+                  <option value="all">كل الحالات</option>
+                  <option value="active">نشط</option>
+                  <option value="invited">مدعو</option>
+                  <option value="suspended">موقوف</option>
+                </select>
+
+                {zones.length > 0 && (
+                  <select value={zoneFilter} onChange={e => setZoneFilter(e.target.value)}
+                    style={{ padding: "8px 12px", border: "1px solid #d8eef8", borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none", color: "#12384f", background: "white", direction: "rtl" }}>
+                    <option value="all">كل المناطق</option>
+                    {zones.map(z => <option key={z} value={z}>{z}</option>)}
+                  </select>
+                )}
+
+                <button onClick={() => setInviteOpen(true)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, background: "linear-gradient(135deg,#0284c7,#0ea5e9)", color: "white", border: "none", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                  ＋ دعوة سائق
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -307,26 +352,19 @@ export default function ProviderFleet() {
           <div style={{ padding: "20px" }}>
             {loading ? (
               <div style={{ textAlign: "center", padding: "48px", color: "#8eb5c8" }}>
-                <div style={{ width: 32, height: 32, border: "2px solid #d8eef8", borderTopColor: "#0ea5e9", borderRadius: "50%", margin: "0 auto 12px", animation: "spin 0.8s linear infinite" }} />
-                <p>جارٍ التحميل...</p>
+                <div style={{ width: 32, height: 32, border: "2px solid #d8eef8", borderTopColor: "#0ea5e9", borderRadius: "50%", margin: "0 auto 12px", animation: "spin 0.8s linear infinite" }} /><p>جارٍ التحميل...</p>
               </div>
             ) : filteredTrucks.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "48px", color: "#8eb5c8", border: "1px dashed #c7e3f2", borderRadius: 12 }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>🚛</div>
-                <p style={{ fontWeight: 600, fontSize: 14 }}>لا توجد شاحنات مطابقة</p>
-              </div>
+              <div style={{ textAlign: "center", padding: "48px", color: "#8eb5c8", border: "1px dashed #c7e3f2", borderRadius: 12 }}><div style={{ fontSize: 36, marginBottom: 12 }}>🚛</div><p style={{ fontWeight: 600, fontSize: 14 }}>لا توجد شاحنات مطابقة</p></div>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
                 {filteredTrucks.map(truck => {
                   const st = TRUCK_STATUS[truck.status];
                   return (
-                    <div
-                      key={truck.id}
+                    <div key={truck.id}
                       style={{ border: "1px solid #d8eef8", borderRadius: 12, overflow: "hidden", background: "#fafcff", transition: "border-color 0.15s, transform 0.15s" }}
                       onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#7dd3fc"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#d8eef8"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
-                    >
-                      {/* Card Top */}
+                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#d8eef8"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}>
                       <div style={{ padding: "16px 18px 12px", borderBottom: "1px solid #eef8fd" }}>
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -342,8 +380,6 @@ export default function ProviderFleet() {
                           </div>
                         </div>
                       </div>
-
-                      {/* Card Stats */}
                       <div style={{ padding: "12px 18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         {[
                           { label: "السعة", value: truck.capacityLiters >= 1000 ? `${truck.capacityLiters / 1000} ألف لتر` : `${truck.capacityLiters} لتر` },
@@ -355,13 +391,9 @@ export default function ProviderFleet() {
                           </div>
                         ))}
                       </div>
-
-                      {/* Card Footer */}
                       <div style={{ padding: "10px 18px 14px" }}>
-                        <button
-                          onClick={() => setDetail({ ...truck, _open: true })}
-                          style={{ width: "100%", padding: "8px 0", background: "#f0f9ff", color: "#0284c7", border: "1px solid #bae6fd", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
-                        >
+                        <button onClick={() => setDetail({ ...truck, _open: true })}
+                          style={{ width: "100%", padding: "8px 0", background: "#f0f9ff", color: "#0284c7", border: "1px solid #bae6fd", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
                           عرض التفاصيل <span>←</span>
                         </button>
                       </div>
@@ -373,52 +405,83 @@ export default function ProviderFleet() {
           </div>
         )}
 
-        {/* ── Drivers Tab ── */}
+        {/* ── Drivers Grid ── */}
         {tab === "drivers" && (
           <div style={{ padding: "20px" }}>
             {loading ? (
               <div style={{ textAlign: "center", padding: "48px", color: "#8eb5c8" }}>
-                <div style={{ width: 32, height: 32, border: "2px solid #d8eef8", borderTopColor: "#0ea5e9", borderRadius: "50%", margin: "0 auto 12px", animation: "spin 0.8s linear infinite" }} />
-              </div>
+                <div style={{ width: 32, height: 32, border: "2px solid #d8eef8", borderTopColor: "#0ea5e9", borderRadius: "50%", margin: "0 auto 12px", animation: "spin 0.8s linear infinite" }} /></div>
             ) : filteredDrivers.length === 0 ? (
               <div style={{ textAlign: "center", padding: "48px", color: "#8eb5c8", border: "1px dashed #c7e3f2", borderRadius: 12 }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>👤</div>
-                <p style={{ fontWeight: 600, fontSize: 14 }}>لا يوجد سائقون مسجلون</p>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>👤</div>
+                <p style={{ fontWeight: 600, fontSize: 14 }}>لا يوجد سائقون مطابقون</p>
+                <button onClick={() => setInviteOpen(true)} style={{ marginTop: 14, padding: "10px 20px", background: "linear-gradient(135deg,#0284c7,#0ea5e9)", color: "white", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>＋ دعوة أول سائق</button>
               </div>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
                 {filteredDrivers.map((driver, i) => {
-                  const st = DRIVER_STATUS[driver.status] ?? DRIVER_STATUS.inactive;
-                  const initials = `S${i + 1}`;
+                  const st = DRIVER_STATUS[driver.status] ?? DRIVER_STATUS.suspended;
+                  const initials = driver.fullName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase() || `S${i + 1}`;
                   return (
-                    <div
-                      key={driver.id}
-                      style={{ border: "1px solid #d8eef8", borderRadius: 12, background: "#fafcff", overflow: "hidden", transition: "border-color 0.15s" }}
-                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = "#7dd3fc"}
-                      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = "#d8eef8"}
-                    >
-                      <div style={{ padding: "16px 18px 14px", borderBottom: "1px solid #eef8fd", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg,#0284c7,#0ea5e9)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>{initials}</div>
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>
-                              {driver.driverType === "owned" ? "سائق تابع" : "سائق مستقل"}
+                    <div key={driver.id} style={{ border: "1px solid #d8eef8", borderRadius: 12, background: "#fafcff", overflow: "hidden", transition: "border-color 0.15s, transform 0.15s" }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#7dd3fc"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#d8eef8"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}>
+
+                      {/* Card Header */}
+                      <div style={{ padding: "16px 18px 12px", borderBottom: "1px solid #eef8fd" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ width: 42, height: 42, borderRadius: "50%", background: driver.status === "active" ? "linear-gradient(135deg,#0284c7,#0ea5e9)" : driver.status === "invited" ? "linear-gradient(135deg,#d97706,#f59e0b)" : "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>{initials}</div>
+                            <div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: "#12384f" }}>{driver.fullName}</div>
+                              <div style={{ fontSize: 11, color: "#8eb5c8", marginTop: 1 }}>📞 {driver.phone}</div>
                             </div>
-                            <div style={{ fontSize: 11, color: "#8eb5c8", marginTop: 1 }}>{driver.phone ?? "لا يوجد رقم"}</div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 5, background: st.bg, border: `1px solid ${st.dot}30`, borderRadius: 20, padding: "4px 10px" }}>
+                            <div style={{ width: 6, height: 6, borderRadius: "50%", background: st.dot }} />
+                            <span style={{ fontSize: 11, fontWeight: 700, color: st.color }}>{st.label}</span>
                           </div>
                         </div>
-                        <span style={{ background: st.bg, color: st.color, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20 }}>{st.label}</span>
                       </div>
 
+                      {/* Card Body */}
                       <div style={{ padding: "12px 18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                         <div style={{ background: "white", border: "1px solid #e8f5fd", borderRadius: 8, padding: "8px 10px" }}>
-                          <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 600, marginBottom: 3 }}>نوع المركبة</div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: "#12384f" }}>{driver.vehicleType ?? "غير محدد"}</div>
+                          <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 600, marginBottom: 3 }}>المنطقة</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#12384f" }}>{driver.zone}</div>
                         </div>
                         <div style={{ background: "white", border: "1px solid #e8f5fd", borderRadius: 8, padding: "8px 10px" }}>
-                          <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 600, marginBottom: 3 }}>نوع التعاقد</div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: "#12384f" }}>{driver.driverType === "owned" ? "دائم" : "مستقل"}</div>
+                          <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 600, marginBottom: 3 }}>آخر نشاط</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#12384f" }}>{fmtDate(driver.lastActivityAt)}</div>
                         </div>
+                      </div>
+
+                      {/* Card Actions */}
+                      <div style={{ padding: "10px 18px 14px", display: "flex", gap: 7 }}>
+                        {driver.status === "invited" && (
+                          <button onClick={() => handleDriverAction(driver, "resend")}
+                            style={{ flex: 1, padding: "7px 0", background: "#fef3c7", color: "#d97706", border: "1px solid #fcd34d", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                            إعادة الإرسال
+                          </button>
+                        )}
+                        {driver.status === "invited" && (
+                          <button onClick={() => handleDriverAction(driver, "activate")}
+                            style={{ flex: 1, padding: "7px 0", background: "#ecfeff", color: "#0891b2", border: "1px solid #67e8f9", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                            تفعيل
+                          </button>
+                        )}
+                        {driver.status === "active" && (
+                          <button onClick={() => handleDriverAction(driver, "suspend")}
+                            style={{ flex: 1, padding: "7px 0", background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                            إيقاف
+                          </button>
+                        )}
+                        {driver.status === "suspended" && (
+                          <button onClick={() => handleDriverAction(driver, "activate")}
+                            style={{ flex: 1, padding: "7px 0", background: "#ecfeff", color: "#0891b2", border: "1px solid #67e8f9", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                            إعادة تفعيل
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -429,20 +492,9 @@ export default function ProviderFleet() {
         )}
       </div>
 
-      {detail && (
-        <TruckDetail
-          truck={detail}
-          onClose={() => setDetail(null)}
-          onStatusChange={handleStatusChange}
-        />
-      )}
-
-      {registerOpen && (
-        <RegisterTruckModal
-          onClose={() => setRegisterOpen(false)}
-          onSaved={() => { loadTrucks(); }}
-        />
-      )}
+      {detail && <TruckDetail truck={detail} onClose={() => setDetail(null)} onStatusChange={handleTruckStatusChange} />}
+      {inviteOpen && <InviteDriverModal onClose={() => setInviteOpen(false)} onSent={r => { setInviteResult(r); loadDrivers(); }} />}
+      {inviteResult && <InviteSuccessModal result={inviteResult} onClose={() => setInviteResult(null)} />}
     </div>
   );
 }
