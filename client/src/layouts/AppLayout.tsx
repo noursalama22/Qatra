@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { api, Provider, Zone } from "../api";
 import { RoleFields } from "../App";
 import NotificationBell from "../components/NotificationBell";
+import DriverBottomNav from "../components/DriverBottomNav";
 import Sidebar from "../components/Sidebar";
 import { getRoleMeta, ROLE_DESCRIPTIONS, roleStatusLabel } from "../constants/roles";
 import { isMapRoute, pageLabel } from "../routes";
@@ -127,7 +128,7 @@ export default function AppLayout({ user, setUser, onLogout }: Props) {
   };
 
   return (
-    <div className="layout" dir="rtl">
+    <div className={`layout${role === "driver" ? " layout--driver" : ""}`} dir="rtl">
       <Sidebar user={user} />
 
       <div className="main" style={isMapRoute(location.pathname) ? { display: "flex", flexDirection: "column" } : {}}>
@@ -161,6 +162,7 @@ export default function AppLayout({ user, setUser, onLogout }: Props) {
         </header>
 
         <Outlet context={outletContext} />
+        {role === "driver" && <DriverBottomNav />}
       </div>
 
       {profileOpen && (

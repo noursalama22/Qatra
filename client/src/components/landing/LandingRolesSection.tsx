@@ -120,9 +120,9 @@ export default function LandingRolesSection() {
                   <div className="landing-progress" style={{ margin: "16px 0" }}>
                     <div style={{ width: "60%" }} />
                   </div>
-                  <button type="button" className="landing-btn landing-btn-primary" style={{ width: "100%" }}>
+                  <Link to="/login/driver" className="landing-btn landing-btn-primary" style={{ width: "100%" }}>
                     بدء الرحلة
-                  </button>
+                  </Link>
                 </div>
               </div>
             </div>

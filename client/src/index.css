@@ -1025,55 +1025,217 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
 }
 
 /* ══════════════════════════════════════════════
-   DRIVER PWA — DARK MOBILE-FIRST UI
+   DRIVER PWA — LIGHT MOBILE-FIRST UI
 ══════════════════════════════════════════════ */
 
-:root {
-  --dpwa-bg: #0b1929;
-  --dpwa-card: #122136;
-  --dpwa-card2: #0f1d30;
-  --dpwa-border: #1e3a55;
-  --dpwa-text: #e2f3fb;
-  --dpwa-muted: #7ab0cc;
+.driver-portal {
+  --dpwa-bg: #f3fbff;
+  --dpwa-card: #ffffff;
+  --dpwa-card2: #f8fcff;
+  --dpwa-border: #d8eef8;
+  --dpwa-text: #12384f;
+  --dpwa-muted: #6b8aa0;
   --dpwa-blue: #0ea5e9;
   --dpwa-blue-dark: #0284c7;
-  --dpwa-yellow: #f59e0b;
-  --dpwa-green: #10b981;
-  --dpwa-red: #ef4444;
+  --dpwa-yellow: #d97706;
+  --dpwa-green: #059669;
+  --dpwa-red: #dc2626;
+  --dpwa-app-header-h: 68px;
+  --dpwa-sidebar-w: 240px;
+  --dpwa-bottom-nav-h: 64px;
+  --dpwa-content-max: 560px;
+  --dpwa-safe-top: env(safe-area-inset-top, 0px);
+  --dpwa-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --dpwa-safe-left: env(safe-area-inset-left, 0px);
+  --dpwa-safe-right: env(safe-area-inset-right, 0px);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Driver shell: full-width main on phones/tablets */
+.layout--driver .main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  min-width: 0;
+  padding-bottom: calc(var(--dpwa-bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+}
+
+.layout--driver {
+  --dpwa-bottom-nav-h: 64px;
+  --dpwa-app-header-h: 68px;
+  --dpwa-sidebar-w: 240px;
+}
+
+.layout--driver .app-header {
+  flex-shrink: 0;
+  padding-inline: clamp(12px, 3vw, 28px);
+}
+
+.layout--driver .app-header h2 {
+  font-size: clamp(15px, 2.5vw, 18px);
+}
+
+@media (max-width: 1024px) {
+  .layout--driver .main {
+    margin-right: 0;
+  }
+
+  .layout--driver .sidebar {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .layout--driver .user-menu-trigger {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .layout--driver .user-menu-copy,
+  .layout--driver .user-menu-chevron {
+    display: none;
+  }
+}
+
+.driver-portal .dpwa-task-card,
+.driver-portal .dpwa-resume-card,
+.driver-portal .dpwa-details-card,
+.driver-portal .dpwa-route-summary-item,
+.driver-portal .dpwa-gps-note,
+.driver-portal .dpwa-sync-pill,
+.driver-portal .dpwa-offline-count,
+.driver-portal .dpwa-security-note,
+.driver-portal .dpwa-proof-preview,
+.driver-portal .dpwa-camera-frame {
+  box-shadow: none;
+}
+
+.driver-portal .dpwa-task-card:hover,
+.driver-portal .dpwa-resume-card:hover {
+  box-shadow: none;
 }
 
 /* Toast */
-.dpwa-toast {
+.driver-portal .dpwa-toast {
   position: fixed;
   bottom: 100px;
   left: 50%;
   transform: translateX(-50%);
-  background: #122136;
-  color: #e2f3fb;
-  border: 1px solid #1e3a55;
+  background: #ffffff;
+  color: #12384f;
+  border: 1px solid #d8eef8;
   padding: 12px 20px;
   border-radius: 50px;
   font-size: 13px;
   font-weight: 600;
   z-index: 9999;
   white-space: nowrap;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  box-shadow: none;
 }
 
 /* ── LIST STAGE ─────────────────────────────────────── */
 
-.driver-pwa-list {
-  min-height: 100vh;
+.driver-portal .driver-pwa-list {
+  flex: 1;
+  min-height: 0;
   background: var(--dpwa-bg);
   color: var(--dpwa-text);
   display: flex;
   flex-direction: column;
 }
 
-.dpwa-list-header {
-  background: linear-gradient(160deg, #0f2846, #0b1929);
-  padding: 28px 24px 24px;
-  border-bottom: 1px solid var(--dpwa-border);
+/* Bottom navigation (mobile / tablet) */
+.layout--driver .dpwa-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: var(--dpwa-safe-left);
+  right: var(--dpwa-safe-right);
+  z-index: 90;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: 4px;
+  min-height: var(--dpwa-bottom-nav-h);
+  padding: 8px 12px max(10px, var(--dpwa-safe-bottom));
+  background: #fff;
+  border-top: 1px solid var(--dpwa-border);
+}
+
+.layout--driver .dpwa-nav-item {
+  flex: 1;
+  max-width: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dpwa-muted);
+  transition: background 0.15s, color 0.15s;
+}
+
+.layout--driver .dpwa-nav-item:hover {
+  color: var(--dpwa-blue);
+  background: #f0f9ff;
+}
+
+.layout--driver .dpwa-nav-active {
+  background: var(--dpwa-blue);
+  color: #fff;
+}
+
+.layout--driver .dpwa-nav-active:hover {
+  background: var(--dpwa-blue-dark);
+  color: #fff;
+}
+
+.driver-portal .dpwa-list-header {
+  background: linear-gradient(135deg, #0284c7, #0ea5e9);
+  padding: clamp(20px, 4vw, 28px) clamp(16px, 4vw, 24px) clamp(18px, 3vw, 24px);
+  padding-top: max(clamp(20px, 4vw, 28px), var(--dpwa-safe-top));
+  border-bottom: none;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.driver-portal .dpwa-list-header .dpwa-greeting,
+.driver-portal .dpwa-list-header .dpwa-stat-val {
+  color: #fff;
+}
+
+.driver-portal .dpwa-list-header .dpwa-greeting-sub,
+.driver-portal .dpwa-list-header .dpwa-stat-lbl {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.driver-portal .dpwa-list-header .dpwa-stat-divider {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.driver-portal .dpwa-list-header .dpwa-list-stats {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.driver-portal .dpwa-list-header .dpwa-gps-off {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.driver-portal .dpwa-list-header .dpwa-gps-on {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ecfdf5;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.driver-portal .dpwa-list-header .dpwa-stat-warn {
+  color: #fde68a;
 }
 
 .dpwa-list-header-top {
@@ -1084,15 +1246,19 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
 }
 
 .dpwa-greeting {
-  font-size: 20px;
+  font-size: clamp(17px, 4.5vw, 20px);
   font-weight: 800;
   color: var(--dpwa-text);
+  line-height: 1.3;
+  word-break: break-word;
 }
 
 .dpwa-greeting-sub {
-  font-size: 12px;
+  font-size: clamp(11px, 2.8vw, 12px);
   color: var(--dpwa-muted);
   margin-top: 3px;
+  line-height: 1.5;
+  word-break: break-word;
 }
 
 .dpwa-gps-badge {
@@ -1143,13 +1309,15 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
   display: flex;
   align-items: center;
   gap: 14px;
-  margin: 16px 16px 0;
+  margin: 16px clamp(12px, 3vw, 16px) 0;
   background: linear-gradient(135deg, rgba(14,165,233,0.15), rgba(14,165,233,0.05));
   border: 1px solid rgba(14,165,233,0.35);
   border-radius: 16px;
-  padding: 16px 18px;
+  padding: clamp(14px, 3vw, 16px) clamp(14px, 3vw, 18px);
   cursor: pointer;
-  width: calc(100% - 32px);
+  width: calc(100% - clamp(24px, 6vw, 32px));
+  max-width: var(--dpwa-content-max);
+  margin-inline: auto;
   text-align: right;
   font-family: inherit;
   transition: all 0.15s;
@@ -1174,6 +1342,16 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
   50% { box-shadow: 0 0 0 8px rgba(14,165,233,0); }
 }
 
+.driver-portal .dpwa-resume-pulse-ring,
+.driver-portal .dpwa-task-notif-dot {
+  animation: dpwaPulseFlat 1.8s ease-in-out infinite;
+  box-shadow: none;
+}
+@keyframes dpwaPulseFlat {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
 .dpwa-resume-info { flex: 1; }
 .dpwa-resume-title { font-size: 14px; font-weight: 700; color: var(--dpwa-blue); }
 .dpwa-resume-sub { font-size: 12px; color: var(--dpwa-muted); margin-top: 3px; }
@@ -1182,10 +1360,13 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
 /* Task list */
 .dpwa-list-tasks {
   flex: 1;
-  padding: 16px;
+  padding: clamp(12px, 3vw, 16px);
   display: flex;
   flex-direction: column;
   gap: 12px;
+  width: 100%;
+  max-width: var(--dpwa-content-max);
+  margin-inline: auto;
 }
 
 .dpwa-task-card {
@@ -1203,7 +1384,11 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
   font-family: inherit;
   transition: all 0.15s;
 }
-.dpwa-task-card:hover { border-color: var(--dpwa-blue); background: #162a44; transform: translateY(-1px); }
+.driver-portal .dpwa-task-card:hover {
+  border-color: var(--dpwa-blue);
+  background: #f0f9ff;
+  transform: translateY(-1px);
+}
 
 .dpwa-task-notif-dot {
   width: 10px;
@@ -1226,14 +1411,23 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
 
 /* ── FULL SCREEN OVERLAY ─────────────────────────────── */
 
-.dpwa-overlay {
+.layout--driver .driver-portal .dpwa-overlay {
   position: fixed;
-  inset: 0;
+  top: var(--dpwa-app-header-h);
+  right: var(--dpwa-sidebar-w);
+  bottom: 0;
+  left: 0;
   background: var(--dpwa-bg);
   z-index: 200;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  .layout--driver .driver-portal .dpwa-overlay {
+    right: 0;
+  }
 }
 
 .dpwa-screen {
@@ -1280,7 +1474,10 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
 
 /* Action zone (bottom) */
 .dpwa-action-zone {
-  padding: 20px 24px 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: clamp(16px, 3vw, 20px) clamp(16px, 4vw, 24px) max(36px, calc(16px + var(--dpwa-safe-bottom)));
   border-top: 1px solid var(--dpwa-border);
   background: var(--dpwa-card2);
   flex-shrink: 0;
@@ -1289,9 +1486,11 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
 /* Buttons */
 .dpwa-btn {
   width: 100%;
-  padding: 18px;
+  max-width: var(--dpwa-content-max);
+  margin-inline: auto;
+  padding: clamp(14px, 3vw, 18px);
   border-radius: 16px;
-  font-size: 16px;
+  font-size: clamp(14px, 3.5vw, 16px);
   font-weight: 800;
   border: none;
   cursor: pointer;
@@ -1305,15 +1504,10 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
 }
 .dpwa-btn:active { transform: scale(0.98); }
 
-.dpwa-btn-accept {
+.driver-portal .dpwa-btn-accept {
   background: linear-gradient(135deg, #0284c7, #0ea5e9);
   color: white;
-  box-shadow: 0 0 0 0 rgba(14,165,233,0.5);
-  animation: dpwaAcceptPulse 2.5s ease-in-out infinite;
-}
-@keyframes dpwaAcceptPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(14,165,233,0.4); }
-  50% { box-shadow: 0 0 0 12px rgba(14,165,233,0); }
+  animation: none;
 }
 
 .dpwa-btn-start {
@@ -1333,7 +1527,12 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
   color: white;
 }
 .dpwa-btn-complete:hover { background: linear-gradient(135deg, #047857, #059669); }
-.dpwa-btn-dim { background: #1e3a55; color: var(--dpwa-muted); cursor: not-allowed; animation: none; }
+.driver-portal .dpwa-btn-dim {
+  background: #e8f4fc;
+  color: var(--dpwa-muted);
+  cursor: not-allowed;
+  animation: none;
+}
 
 .dpwa-btn-next {
   background: var(--dpwa-card);
@@ -1461,20 +1660,20 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
 }
 
 .dpwa-map-footer {
-  padding: 16px 24px 32px;
+  padding: clamp(12px, 3vw, 16px) clamp(16px, 4vw, 24px) max(32px, calc(12px + var(--dpwa-safe-bottom)));
   background: var(--dpwa-card2);
   border-top: 1px solid var(--dpwa-border);
   flex-shrink: 0;
 }
 
 /* Driver GPS dot on Leaflet map */
-.dpwa-driver-dot {
+.driver-portal .dpwa-driver-dot {
   width: 18px;
   height: 18px;
   background: #0ea5e9;
   border: 2px solid white;
   border-radius: 50%;
-  box-shadow: 0 0 0 4px rgba(14,165,233,0.35);
+  box-shadow: none;
   animation: dpwaPulse 1.8s ease-in-out infinite;
 }
 
@@ -1499,9 +1698,9 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
   max-width: 340px;
 }
 
-.dpwa-camera-frame {
+.driver-portal .dpwa-camera-frame {
   position: relative;
-  background: #0a1520;
+  background: #f0f9ff;
   border: 1px solid var(--dpwa-border);
   border-radius: 20px;
   aspect-ratio: 4/3;
@@ -1529,14 +1728,14 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
 .dpwa-camera-glyph { font-size: 48px; margin-bottom: 10px; }
 .dpwa-camera-hint { font-size: 14px; font-weight: 600; color: var(--dpwa-muted); }
 
-.dpwa-gps-pill {
+.driver-portal .dpwa-gps-pill {
   position: absolute;
   bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(14,165,233,0.2);
-  border: 1px solid rgba(14,165,233,0.4);
-  color: #7dd3fc;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #bae6fd;
+  color: #0369a1;
   font-size: 10px;
   font-weight: 600;
   padding: 4px 12px;
@@ -1587,13 +1786,13 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
   font-family: inherit;
 }
 
-.dpwa-security-note {
+.driver-portal .dpwa-security-note {
   margin: 16px 0;
   font-size: 11px;
   color: var(--dpwa-muted);
   text-align: center;
   padding: 10px 16px;
-  background: rgba(255,255,255,0.03);
+  background: #f0f9ff;
   border-radius: 10px;
   border: 1px solid var(--dpwa-border);
   max-width: 340px;
@@ -1643,7 +1842,11 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
   text-align: right;
   margin-bottom: 16px;
 }
-.dpwa-sync-online { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); color: #34d399; }
+.driver-portal .dpwa-sync-online {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+}
 .dpwa-sync-offline { background: rgba(107,136,160,0.12); border: 1px solid var(--dpwa-border); color: var(--dpwa-muted); }
 .dpwa-sync-sub { font-size: 12px; font-weight: 400; margin-top: 3px; color: var(--dpwa-muted); }
 
@@ -1657,9 +1860,154 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
   max-width: 300px;
 }
 
-/* ── MOBILE SIDEBAR HIDE FOR DRIVER ─────────────────── */
-@media (max-width: 768px) {
-  .dpwa-overlay ~ .sidebar,
-  .dpwa-overlay + .sidebar { display: none; }
-  .driver-pwa-list { padding-bottom: 20px; }
+/* ── DRIVER RESPONSIVE ───────────────────────────────── */
+.driver-portal .dpwa-toast {
+  bottom: calc(var(--dpwa-bottom-nav-h) + 16px + var(--dpwa-safe-bottom));
+  max-width: min(92vw, 360px);
+  white-space: normal;
+  text-align: center;
+  line-height: 1.4;
+}
+
+@media (min-width: 1025px) {
+  .layout--driver .main {
+    padding-bottom: 0;
+  }
+
+  .layout--driver .dpwa-bottom-nav {
+    display: none;
+  }
+
+  .driver-portal .driver-pwa-list {
+    min-height: calc(100dvh - var(--dpwa-app-header-h));
+    padding-bottom: 24px;
+  }
+
+  .driver-portal .dpwa-toast {
+    bottom: 32px;
+  }
+
+  .layout--driver .driver-portal .dpwa-overlay .dpwa-screen:not(.dpwa-screen-map) {
+    max-width: 640px;
+    margin-inline: auto;
+    width: 100%;
+    border-inline: 1px solid var(--dpwa-border);
+  }
+}
+
+@media (min-width: 768px) {
+  .driver-portal .dpwa-accept-body,
+  .driver-portal .dpwa-route-body,
+  .driver-portal .dpwa-proof-body,
+  .driver-portal .dpwa-done-body {
+    padding-inline: clamp(24px, 5vw, 40px);
+  }
+
+  .driver-portal .dpwa-details-card,
+  .driver-portal .dpwa-route-summary,
+  .driver-portal .dpwa-gps-note,
+  .driver-portal .dpwa-camera-label,
+  .driver-portal .dpwa-proof-preview,
+  .driver-portal .dpwa-security-note,
+  .driver-portal .dpwa-sync-pill {
+    max-width: min(100%, var(--dpwa-content-max));
+  }
+}
+
+@media (max-width: 640px) {
+  .driver-portal .dpwa-list-header-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .driver-portal .dpwa-gps-badge {
+    align-self: flex-start;
+  }
+
+  .driver-portal .dpwa-map-topbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px clamp(12px, 3vw, 16px);
+  }
+
+  .driver-portal .dpwa-map-zone {
+    font-size: clamp(14px, 3.8vw, 16px);
+  }
+
+  .driver-portal .dpwa-task-card {
+    padding: clamp(14px, 3vw, 18px);
+    gap: 10px;
+  }
+
+  .driver-portal .dpwa-task-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .driver-portal .dpwa-top-label {
+    font-size: 11px;
+    letter-spacing: 0.2px;
+    text-align: center;
+    flex: 1;
+  }
+
+  .driver-portal .dpwa-alert-title {
+    font-size: clamp(20px, 5vw, 24px);
+  }
+
+  .driver-portal .dpwa-done-title {
+    font-size: clamp(22px, 5.5vw, 26px);
+  }
+}
+
+@media (max-width: 400px) {
+  .driver-portal .dpwa-list-stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px 8px;
+    padding: 14px 10px;
+  }
+
+  .driver-portal .dpwa-stat-divider {
+    display: none;
+  }
+
+  .driver-portal .dpwa-stat-val {
+    font-size: 18px;
+  }
+
+  .driver-portal .dpwa-resume-title {
+    font-size: 13px;
+  }
+
+  .driver-portal .dpwa-gps-pill {
+    max-width: calc(100% - 24px);
+    white-space: normal;
+    text-align: center;
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 360px) {
+  .layout--driver .dpwa-nav-item {
+    font-size: 11px;
+    padding-inline: 6px;
+  }
+
+  .layout--driver .dpwa-nav-item span:first-child {
+    font-size: 18px;
+  }
+}
+
+.layout--driver .map-page {
+  min-height: calc(100dvh - var(--dpwa-app-header-h) - var(--dpwa-bottom-nav-h) - env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 1025px) {
+  .layout--driver .map-page {
+    height: calc(100dvh - var(--dpwa-app-header-h));
+    min-height: calc(100dvh - var(--dpwa-app-header-h));
+  }
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { Map as LeafletMap, Marker, Polygon } from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { useAppContext, type AuthUser } from "../components/RequireRole";
 
 type Stage = "list" | "accept" | "route" | "navigate" | "proof" | "complete";
 
@@ -20,21 +21,32 @@ type Zone = {
   boundary: [number, number][] | null;
 };
 
-type AuthUser = {
+type DriverProfile = {
   id: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-  profile: {
-    id: string;
-    driverType: string;
-    vehicleType: string | null;
-    phone: string | null;
-    status: string;
-  } | null;
+  driverType?: string;
+  providerId?: string | null;
+  providerCompanyName?: string | null;
+  vehicleType?: string | null;
+  phone?: string | null;
+  status?: string;
 };
 
 const OFFLINE_KEY = "qatra_driver_proof_queue";
+
+function getDriverProfile(user: AuthUser): DriverProfile | null {
+  if (!user.profile || typeof user.profile !== "object") return null;
+  const p = user.profile as Record<string, unknown>;
+  if (typeof p.id !== "string") return null;
+  return {
+    id: p.id,
+    driverType: typeof p.driverType === "string" ? p.driverType : undefined,
+    providerId: typeof p.providerId === "string" ? p.providerId : null,
+    providerCompanyName: typeof p.providerCompanyName === "string" ? p.providerCompanyName : null,
+    vehicleType: typeof p.vehicleType === "string" ? p.vehicleType : null,
+    phone: typeof p.phone === "string" ? p.phone : null,
+    status: typeof p.status === "string" ? p.status : undefined,
+  };
+}
 
 function centroid(pts: [number, number][]): [number, number] {
   const lat = pts.reduce((s, p) => s + p[0], 0) / pts.length;
@@ -43,10 +55,11 @@ function centroid(pts: [number, number][]): [number, number] {
 }
 
 export default function DriverPortal() {
+  const { user } = useAppContext();
+  const profile = getDriverProfile(user);
   const [stage, setStage] = useState<Stage>("list");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
-  const [user, setUser] = useState<AuthUser | null>(null);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [gpsPos, setGpsPos] = useState<{ lat: number; lng: number } | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -109,10 +122,10 @@ export default function DriverPortal() {
   }, [loadTasks, loadOfflineCount]);
 
   useEffect(() => {
-    fetch("/api/auth/me").then(r => r.json()).then(u => {
-      setUser(u);
-      userRef.current = u;
-    }).catch(() => {});
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
     loadTasks();
     loadOfflineCount();
 
@@ -125,7 +138,7 @@ export default function DriverPortal() {
       window.removeEventListener("offline", goOffline);
       stopGps();
     };
-  }, []);
+  }, [loadTasks, loadOfflineCount, syncOfflineQueue]);
 
   useEffect(() => { gpsPosRef.current = gpsPos; }, [gpsPos]);
   useEffect(() => { activeTaskRef.current = activeTask; }, [activeTask]);
@@ -190,12 +203,13 @@ export default function DriverPortal() {
     gpsIntervalRef.current = setInterval(() => {
       const pos = gpsPosRef.current;
       const u = userRef.current;
+      const driverId = u ? getDriverProfile(u)?.id : null;
       const task = activeTaskRef.current;
-      if (!pos || !u?.profile?.id) return;
+      if (!pos || !driverId) return;
       fetch("/api/gps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ driverId: u.profile.id, lat: pos.lat, lng: pos.lng, taskId: task?.id ?? null }),
+        body: JSON.stringify({ driverId, lat: pos.lat, lng: pos.lng, taskId: task?.id ?? null }),
       }).catch(() => {});
     }, 10000);
   }
@@ -273,8 +287,13 @@ export default function DriverPortal() {
   const inProgressTask = tasks.find(t => t.status === "in_progress");
   const deliveredLiters = tasks.filter(t => t.status === "delivered").reduce((s, t) => s + Number(t.quantityLiters), 0);
 
+  const displayName = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || "السائق";
+  const providerLabel = profile?.driverType === "independent"
+    ? "مستقل"
+    : (profile?.providerCompanyName ?? "مزود الخدمة");
+
   return (
-    <>
+    <div className="driver-portal">
       {toast && <div className="dpwa-toast">{toast}</div>}
 
       {/* ── LIST STAGE ─────────────────────────────────────────── */}
@@ -283,10 +302,9 @@ export default function DriverPortal() {
           <div className="dpwa-list-header">
             <div className="dpwa-list-header-top">
               <div>
-                <div className="dpwa-greeting">مرحباً، {user ? `${user.firstName} ${user.lastName}` : "السائق"}</div>
+                <div className="dpwa-greeting">مرحباً، {displayName}</div>
                 <div className="dpwa-greeting-sub">
-                  {user?.profile?.vehicleType ?? "شاحنة مياه"} ·{" "}
-                  {user?.profile?.driverType === "independent" ? "مستقل" : "تابع لمزود"}
+                  {profile?.vehicleType ?? "شاحنة مياه"} · {providerLabel}
                 </div>
               </div>
               <div className={`dpwa-gps-badge ${gpsPos ? "dpwa-gps-on" : "dpwa-gps-off"}`}>
@@ -364,7 +382,9 @@ export default function DriverPortal() {
               <div className="dpwa-accept-body">
                 <div className="dpwa-alert-glyph">🚛</div>
                 <div className="dpwa-alert-title">مهمة توزيع جديدة!</div>
-                <div className="dpwa-alert-sub">تم تعيين هذه المهمة من قِبل المزود المسؤول</div>
+                <div className="dpwa-alert-sub">
+                  تم تعيين هذه المهمة من قِبل {profile?.providerCompanyName ?? "المزود المسؤول"}
+                </div>
 
                 <div className="dpwa-details-card">
                   <div className="dpwa-detail-row">
@@ -573,6 +593,6 @@ export default function DriverPortal() {
 
         </div>
       )}
-    </>
+    </div>
   );
 }

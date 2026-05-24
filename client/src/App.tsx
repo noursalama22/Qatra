@@ -24,7 +24,7 @@ import Logo from "./components/Logo";
 import { api, Provider, Zone } from "./api";
 import { DEFAULT_NGO_PATH, ROLE_HOME, Role } from "./routes";
 
-export type AuthIntent = "provider" | "default";
+export type AuthIntent = "provider" | "driver" | "default";
 
 type AuthMode = "login" | "register";
 
@@ -92,7 +92,7 @@ function AuthScreen({
   const [mode, setMode] = useState<AuthMode>("login");
   const [form, setForm] = useState<AuthForm>(() => ({
     ...emptyAuthForm(),
-    role: intent === "provider" ? "provider" : "ngo",
+    role: intent === "provider" ? "provider" : intent === "driver" ? "driver" : "ngo",
   }));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -134,10 +134,15 @@ function AuthScreen({
         {intent === "provider" && (
           <div className="auth-intent-label">دخول مزود الخدمة — لوحة العمليات</div>
         )}
+        {intent === "driver" && (
+          <div className="auth-intent-label">دخول السائق — تطبيق التوزيع</div>
+        )}
 
         <div className="auth-tabs">
-          <button className={mode === "login" ? "auth-tab-active" : ""} onClick={() => setMode("login")}>تسجيل الدخول</button>
-          <button className={mode === "register" ? "auth-tab-active" : ""} onClick={() => setMode("register")}>إنشاء حساب</button>
+          <button type="button" className={mode === "login" ? "auth-tab-active" : ""} onClick={() => setMode("login")}>تسجيل الدخول</button>
+          {intent !== "driver" && (
+            <button type="button" className={mode === "register" ? "auth-tab-active" : ""} onClick={() => setMode("register")}>إنشاء حساب</button>
+          )}
         </div>
 
         <form onSubmit={submit} className="auth-form">
@@ -366,6 +371,18 @@ export default function App() {
           element={
             <AuthScreen
               intent="provider"
+              onAuth={nextUser => {
+                setUser(nextUser);
+                navigate(ROLE_HOME[nextUser.role], { replace: true });
+              }}
+            />
+          }
+        />
+        <Route
+          path="/login/driver"
+          element={
+            <AuthScreen
+              intent="driver"
               onAuth={nextUser => {
                 setUser(nextUser);
                 navigate(ROLE_HOME[nextUser.role], { replace: true });

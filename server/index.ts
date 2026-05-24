@@ -109,7 +109,15 @@ async function getProfile(role: AuthRole, profileId: string | null): Promise<Pro
   }
   if (role === "driver") {
     const [profile] = await db.select().from(driversTable).where(eq(driversTable.id, profileId));
-    return profile ?? null;
+    if (!profile) return null;
+    if (!profile.providerId) {
+      return { ...profile, providerCompanyName: null };
+    }
+    const [provider] = await db
+      .select({ companyName: providersTable.companyName })
+      .from(providersTable)
+      .where(eq(providersTable.id, profile.providerId));
+    return { ...profile, providerCompanyName: provider?.companyName ?? null };
   }
   if (role === "citizen") {
     const [profile] = await db.select().from(citizensTable).where(eq(citizensTable.id, profileId));
