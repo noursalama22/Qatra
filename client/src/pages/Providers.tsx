@@ -38,7 +38,7 @@ export default function Providers() {
           <tbody>
             {providers.map(p => (
               <tr key={p.id}>
-                <td style={{ fontWeight: 500 }}>🚚 {p.companyName}</td>
+                <td style={{ fontWeight: 500 }}> {p.companyName}</td>
                 <td style={{ fontSize: 12, color: "var(--gray)" }}>{p.contactEmail}</td>
                 <td>
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>

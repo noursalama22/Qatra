@@ -10,7 +10,7 @@ const statusBadge = (s: string) => {
 };
 
 const statusDot: Record<string, string> = {
-  pending: "🟡", in_progress: "🔵", delivered: "✅", cancelled: "🔴",
+  pending: "", in_progress: "", delivered: "", cancelled: "",
 };
 
 export default function Tasks() {
@@ -69,7 +69,7 @@ export default function Tasks() {
             {f !== "all" && ` (${tasks.filter(t => t.status === f).length})`}
           </button>
         ))}
-        <button className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={() => setShowModal(true)}>
+        <button className="btn btn-primary" style={{ marginInlineStart: "auto" }} onClick={() => setShowModal(true)}>
           + New Task
         </button>
       </div>
@@ -82,7 +82,7 @@ export default function Tasks() {
           </div>
         </div>
         {filtered.length === 0 ? (
-          <div className="empty"><div className="empty-icon">📋</div><p>No tasks found.</p></div>
+          <div className="empty"><div className="empty-icon"></div><p>No tasks found.</p></div>
         ) : (
           <table>
             <thead>
@@ -113,7 +113,7 @@ export default function Tasks() {
                     <td>
                       {t.status === "pending" && (
                         <button className="btn btn-sm btn-success" onClick={() => handleStatusChange(t.id, "in_progress")}>
-                          ▶ Start
+                           Start
                         </button>
                       )}
                       {t.status === "in_progress" && (
@@ -122,7 +122,7 @@ export default function Tasks() {
                         </button>
                       )}
                       {(t.status === "pending" || t.status === "in_progress") && (
-                        <button className="btn btn-sm btn-danger" style={{ marginLeft: 4 }} onClick={() => handleStatusChange(t.id, "cancelled")}>
+                        <button className="btn btn-sm btn-danger" style={{ marginInlineStart: 4 }} onClick={() => handleStatusChange(t.id, "cancelled")}>
                           ✕
                         </button>
                       )}
@@ -138,7 +138,7 @@ export default function Tasks() {
       {showModal && (
         <div className="modal-backdrop" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3>📋 New Distribution Task</h3>
+            <h3> New Distribution Task</h3>
             <div className="form-group">
               <label className="form-label">NGO</label>
               <select className="form-control" value={form.ngoId} onChange={e => setForm(f => ({ ...f, ngoId: e.target.value }))}>

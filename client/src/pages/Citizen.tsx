@@ -5,17 +5,17 @@ type SignalState = "idle" | "sending" | "sent";
 type OrderStep = "idle" | "form" | "confirming" | "done";
 
 const taskStatusLabel: Record<string, { ar: string; cls: string; icon: string }> = {
-  pending:     { ar: "مجدول",    cls: "badge-yellow", icon: "🕐" },
-  in_progress: { ar: "جارٍ الآن", cls: "badge-blue",   icon: "🚛" },
-  delivered:   { ar: "تم التوصيل", cls: "badge-green",  icon: "✅" },
-  cancelled:   { ar: "ملغى",     cls: "badge-red",    icon: "❌" },
+  pending:     { ar: "مجدول",    cls: "badge-yellow", icon: "" },
+  in_progress: { ar: "جارٍ الآن", cls: "badge-blue",   icon: "" },
+  delivered:   { ar: "تم التوصيل", cls: "badge-green",  icon: "" },
+  cancelled:   { ar: "ملغى",     cls: "badge-red",    icon: "" },
 };
 
 const orderStatusLabel: Record<string, { ar: string; cls: string; icon: string }> = {
-  pending:    { ar: "قيد الانتظار", cls: "badge-yellow", icon: "🕐" },
-  dispatched: { ar: "في الطريق",   cls: "badge-blue",   icon: "🚛" },
-  delivered:  { ar: "تم التوصيل", cls: "badge-green",  icon: "✅" },
-  cancelled:  { ar: "ملغى",        cls: "badge-red",    icon: "❌" },
+  pending:    { ar: "قيد الانتظار", cls: "badge-yellow", icon: "" },
+  dispatched: { ar: "في الطريق",   cls: "badge-blue",   icon: "" },
+  delivered:  { ar: "تم التوصيل", cls: "badge-green",  icon: "" },
+  cancelled:  { ar: "ملغى",        cls: "badge-red",    icon: "" },
 };
 
 const DEMO_CITIZEN_ID = "seed-c1";
@@ -97,7 +97,7 @@ export default function Citizen() {
       {/* ── Zone Selector Hero ─────────────────────────── */}
       <div className="citizen-hero">
         <div className="citizen-hero-inner">
-          <div className="citizen-hero-label">💧 منطقتك</div>
+          <div className="citizen-hero-label"> منطقتك</div>
           <div className="zone-selector-wrap">
             <select
               className="zone-selector"
@@ -120,7 +120,7 @@ export default function Citizen() {
               </div>
               <div className="hero-stat-divider" />
               <div className="hero-stat">
-                <span className="hero-stat-val" style={{ color: signalCount > 50 ? "#ef4444" : signalCount > 25 ? "#f59e0b" : "#10b981" }}>
+                <span className="hero-stat-val" style={{ color: signalCount > 50 ? "#ef4444" : signalCount > 25 ? "#f59e0b" : "#14b8a6" }}>
                   {signalCount}
                 </span>
                 <span className="hero-stat-label">إشارة احتياج نشطة</span>
@@ -144,7 +144,7 @@ export default function Citizen() {
         {/* ── Next Delivery Banner ───────────────────────── */}
         {nextDelivery && (
           <div className={`next-delivery-banner ${nextDelivery.status === "in_progress" ? "banner-live" : "banner-upcoming"}`}>
-            <div className="banner-icon">{nextDelivery.status === "in_progress" ? "🚛" : "📅"}</div>
+            <div className="banner-icon">{nextDelivery.status === "in_progress" ? "" : ""}</div>
             <div className="banner-text">
               <div className="banner-title">
                 {nextDelivery.status === "in_progress" ? "التوزيع جارٍ الآن!" : "التوزيع القادم"}
@@ -157,7 +157,7 @@ export default function Citizen() {
               </div>
             </div>
             {nextDelivery.status === "in_progress" && (
-              <span className="live-pill">🔴 مباشر</span>
+              <span className="live-pill"> مباشر</span>
             )}
           </div>
         )}
@@ -166,12 +166,12 @@ export default function Citizen() {
         <div className="action-cards">
           {/* Signal Card */}
           <div className="action-card action-card-signal">
-            <div className="action-card-icon">🆘</div>
+            <div className="action-card-icon"></div>
             <div className="action-card-content">
               <h3>إشارة احتياج مياه</h3>
               <p>اضغط لتُعلم منظمة الإغاثة بحاجتك العاجلة للمياه. كلما زادت الإشارات، زادت أولوية منطقتك.</p>
               {signalState === "sent" && (
-                <div className="signal-success">✅ تم إرسال إشارتك! شكراً لك.</div>
+                <div className="signal-success"> تم إرسال إشارتك! شكراً لك.</div>
               )}
             </div>
             <button
@@ -179,13 +179,13 @@ export default function Citizen() {
               onClick={handleSendSignal}
               disabled={signalState !== "idle"}
             >
-              {signalState === "sending" ? "جارٍ الإرسال…" : signalState === "sent" ? "✅ أُرسلت" : "🆘 أرسل إشارة"}
+              {signalState === "sending" ? "جارٍ الإرسال…" : signalState === "sent" ? " أُرسلت" : " أرسل إشارة"}
             </button>
           </div>
 
           {/* Order Card */}
           <div className="action-card action-card-order">
-            <div className="action-card-icon">🛒</div>
+            <div className="action-card-icon"></div>
             <div className="action-card-content">
               <h3>طلب شراء مياه</h3>
               <p>اطلب توصيل مياه مباشرة من أحد مزودي الخدمة المعتمدين في منطقتك.</p>
@@ -194,7 +194,7 @@ export default function Citizen() {
               className="action-btn btn-order"
               onClick={() => { setOrderStep("form"); setOrderForm(f => ({ ...f, providerId: providers[0]?.id ?? "" })); }}
             >
-              🛒 اطلب الآن
+               اطلب الآن
             </button>
           </div>
         </div>
@@ -202,10 +202,10 @@ export default function Citizen() {
         {/* ── Tabs ──────────────────────────────────────── */}
         <div className="citizen-tabs">
           <button className={`ctab ${tab === "schedule" ? "ctab-active" : ""}`} onClick={() => setTab("schedule")}>
-            📅 جدول التوزيع
+             جدول التوزيع
           </button>
           <button className={`ctab ${tab === "orders" ? "ctab-active" : ""}`} onClick={() => setTab("orders")}>
-            📦 طلباتي
+             طلباتي
             {myOrders.filter(o => o.status === "pending" || o.status === "dispatched").length > 0 && (
               <span className="tab-badge">{myOrders.filter(o => o.status === "pending" || o.status === "dispatched").length}</span>
             )}
@@ -216,20 +216,20 @@ export default function Citizen() {
         {tab === "schedule" && (
           <div className="citizen-card">
             <div className="citizen-card-header">
-              <span>📅 جدول توزيع المياه</span>
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>{selectedZone?.name}</span>
+              <span> جدول توزيع المياه</span>
+              <span style={{ fontSize: 12, color: "#8eb5c8" }}>{selectedZone?.name}</span>
             </div>
             {loadingSchedule ? (
               <div className="loading"><div className="spinner" /></div>
             ) : schedule.length === 0 ? (
               <div className="empty" style={{ direction: "rtl" }}>
-                <div className="empty-icon">📋</div>
+                <div className="empty-icon"></div>
                 <p>لا توجد مهام توزيع مجدولة لهذه المنطقة حالياً</p>
               </div>
             ) : (
               <div className="schedule-list">
                 {schedule.map(t => {
-                  const st = taskStatusLabel[t.status] ?? { ar: t.status, cls: "badge-gray", icon: "❓" };
+                  const st = taskStatusLabel[t.status] ?? { ar: t.status, cls: "badge-gray", icon: "" };
                   const date = new Date(t.scheduledAt);
                   const isToday = new Date().toDateString() === date.toDateString();
                   return (
@@ -261,18 +261,18 @@ export default function Citizen() {
         {tab === "orders" && (
           <div className="citizen-card">
             <div className="citizen-card-header">
-              <span>📦 طلباتي</span>
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>{myOrders.length} طلب</span>
+              <span> طلباتي</span>
+              <span style={{ fontSize: 12, color: "#8eb5c8" }}>{myOrders.length} طلب</span>
             </div>
             {myOrders.length === 0 ? (
               <div className="empty" style={{ direction: "rtl" }}>
-                <div className="empty-icon">📦</div>
+                <div className="empty-icon"></div>
                 <p>لم تقم بأي طلبات بعد</p>
               </div>
             ) : (
               <div className="schedule-list">
                 {myOrders.map(o => {
-                  const st = orderStatusLabel[o.status] ?? { ar: o.status, cls: "badge-gray", icon: "❓" };
+                  const st = orderStatusLabel[o.status] ?? { ar: o.status, cls: "badge-gray", icon: "" };
                   const prov = providers.find(p => p.id === o.providerId);
                   return (
                     <div key={o.id} className="schedule-item">
@@ -282,10 +282,10 @@ export default function Citizen() {
                       </div>
                       <div className="schedule-info">
                         <div className="schedule-title">
-                          🛒 {Number(o.quantityLiters).toLocaleString()} لتر من {prov?.companyName ?? "مزود"}
+                           {Number(o.quantityLiters).toLocaleString()} لتر من {prov?.companyName ?? "مزود"}
                         </div>
                         <div className="schedule-time">
-                          المبلغ: <strong style={{ color: "#10b981" }}>${o.totalAmount}</strong>
+                          المبلغ: <strong style={{ color: "#14b8a6" }}>${o.totalAmount}</strong>
                         </div>
                       </div>
                       <span className={`badge ${st.cls}`}>{st.ar}</span>
@@ -302,7 +302,7 @@ export default function Citizen() {
       {(orderStep === "form" || orderStep === "confirming") && (
         <div className="modal-backdrop" onClick={() => orderStep === "form" && setOrderStep("idle")}>
           <div className="modal citizen-modal" dir="rtl" onClick={e => e.stopPropagation()}>
-            <h3>🛒 طلب توصيل مياه</h3>
+            <h3> طلب توصيل مياه</h3>
 
             <div className="form-group">
               <label className="form-label">المزود</label>
@@ -342,7 +342,7 @@ export default function Citizen() {
               </div>
               <div className="order-summary-row order-summary-total">
                 <span>المجموع</span>
-                <span style={{ color: "#10b981", fontSize: 20, fontWeight: 700 }}>${calcTotal()}</span>
+                <span style={{ color: "#14b8a6", fontSize: 20, fontWeight: 700 }}>${calcTotal()}</span>
               </div>
             </div>
 
@@ -350,7 +350,7 @@ export default function Citizen() {
               <button className="btn btn-outline" onClick={() => setOrderStep("idle")}>إلغاء</button>
               <button className="btn btn-primary" onClick={handlePlaceOrder}
                 disabled={!orderForm.providerId || !orderForm.quantityLiters || orderStep === "confirming"}>
-                {orderStep === "confirming" ? "جارٍ التأكيد…" : "✅ تأكيد الطلب"}
+                {orderStep === "confirming" ? "جارٍ التأكيد…" : " تأكيد الطلب"}
               </button>
             </div>
           </div>

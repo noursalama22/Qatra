@@ -69,7 +69,7 @@ export default function Orders() {
           </div>
         </div>
         {filtered.length === 0 ? (
-          <div className="empty"><div className="empty-icon">📦</div><p>No orders found.</p></div>
+          <div className="empty"><div className="empty-icon"></div><p>No orders found.</p></div>
         ) : (
           <table>
             <thead>
@@ -90,7 +90,7 @@ export default function Orders() {
                     <td style={{ fontFamily: "monospace", fontSize: 12, color: "var(--gray)" }}>{o.id}</td>
                     <td style={{ fontSize: 13 }}>{provider?.companyName ?? o.providerId}</td>
                     <td className="liters">{Number(o.quantityLiters).toLocaleString()} L</td>
-                    <td style={{ fontWeight: 600, color: "#16a34a" }}>${o.totalAmount}</td>
+                    <td style={{ fontWeight: 600, color: "#0891b2" }}>${o.totalAmount}</td>
                     <td><span className={statusBadge(o.status)}>{o.status}</span></td>
                     <td style={{ fontSize: 12, color: "var(--gray)" }}>{new Date(o.createdAt).toLocaleDateString()}</td>
                   </tr>

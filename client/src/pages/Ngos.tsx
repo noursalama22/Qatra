@@ -40,9 +40,9 @@ export default function Ngos() {
           <tbody>
             {ngos.map(n => (
               <tr key={n.id}>
-                <td style={{ fontWeight: 500 }}>🏢 {n.orgName}</td>
+                <td style={{ fontWeight: 500 }}> {n.orgName}</td>
                 <td>
-                  <span className="badge badge-gray">🌍 {n.country}</span>
+                  <span className="badge badge-gray"> {n.country}</span>
                 </td>
                 <td style={{ fontSize: 12, color: "var(--gray)" }}>{n.contactEmail}</td>
                 <td><span className={statusBadge(n.status)}>{n.status}</span></td>

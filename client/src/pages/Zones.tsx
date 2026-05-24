@@ -41,7 +41,7 @@ export default function Zones() {
             {f === "all" ? "All Zones" : f.charAt(0).toUpperCase() + f.slice(1)} {f !== "all" && `(${zones.filter(z => z.status === f).length})`}
           </button>
         ))}
-        <button className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={() => setShowModal(true)}>
+        <button className="btn btn-primary" style={{ marginInlineStart: "auto" }} onClick={() => setShowModal(true)}>
           + New Zone
         </button>
       </div>
@@ -54,7 +54,7 @@ export default function Zones() {
           </div>
         </div>
         {filtered.length === 0 ? (
-          <div className="empty"><div className="empty-icon">🗺️</div><p>No zones found.</p></div>
+          <div className="empty"><div className="empty-icon"></div><p>No zones found.</p></div>
         ) : (
           <table>
             <thead>
@@ -79,16 +79,16 @@ export default function Zones() {
                     <td><span className={statusBadge(z.status)}>{z.status}</span></td>
                     <td>{z.populationEstimate.toLocaleString()}</td>
                     <td>
-                      <span style={{ fontWeight: 600, color: z.signalCount > 50 ? "#dc2626" : z.signalCount > 25 ? "#d97706" : "#16a34a" }}>
+                      <span style={{ fontWeight: 600, color: z.signalCount > 50 ? "#dc2626" : z.signalCount > 25 ? "#d97706" : "#0891b2" }}>
                         {z.signalCount}
                       </span>
                     </td>
                     <td style={{ width: 160 }}>
-                      <div style={{ display: "flex", align: "center", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div className="progress" style={{ flex: 1 }}>
                           <div className="progress-bar" style={{
                             width: `${pct}%`,
-                            background: z.signalCount > 50 ? "#dc2626" : z.signalCount > 25 ? "#d97706" : "#16a34a"
+                            background: z.signalCount > 50 ? "#dc2626" : z.signalCount > 25 ? "#d97706" : "#0891b2"
                           }} />
                         </div>
                         <span style={{ fontSize: 11, color: "var(--gray)", minWidth: 32 }}>{pct}%</span>
@@ -108,7 +108,7 @@ export default function Zones() {
       {showModal && (
         <div className="modal-backdrop" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3>🗺️ Create New Zone</h3>
+            <h3> Create New Zone</h3>
             <div className="form-group">
               <label className="form-label">Zone Name *</label>
               <input className="form-control" placeholder="e.g. North Aleppo" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />

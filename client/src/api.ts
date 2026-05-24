@@ -1,29 +1,38 @@
 const BASE = "/api";
 
+async function readResponse<T>(res: Response): Promise<T> {
+  const contentType = res.headers.get("content-type") ?? "";
+  const body = contentType.includes("application/json") ? await res.json() : await res.text();
+  if (!res.ok) {
+    const message = typeof body === "object" && body && "error" in body ? String(body.error) : `${res.status}: ${res.statusText}`;
+    throw new Error(message);
+  }
+  return body as T;
+}
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
-  if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`);
-  return res.json();
+  const res = await fetch(`${BASE}${path}`, { credentials: "same-origin" });
+  return readResponse<T>(res);
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`);
-  return res.json();
+  return readResponse<T>(res);
 }
 
 async function patch<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`);
-  return res.json();
+  return readResponse<T>(res);
 }
 
 export const api = { get, post, patch };

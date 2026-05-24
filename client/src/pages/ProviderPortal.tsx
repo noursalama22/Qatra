@@ -8,7 +8,7 @@ type Zone = { id: string; name: string };
 const DEMO_PROVIDER_ID = "seed-p1";
 const STATUS_LABELS: Record<string, string> = { pending: "مجدولة", in_progress: "جارية", delivered: "مُنجزة", cancelled: "ملغاة" };
 const ORDER_STATUS_LABELS: Record<string, string> = { pending: "معلق", dispatched: "جاري التوصيل", delivered: "مُسلَّم", cancelled: "ملغي" };
-const STATUS_COLORS: Record<string, string> = { pending: "#f59e0b", in_progress: "#2563eb", delivered: "#10b981", cancelled: "#94a3b8", dispatched: "#8b5cf6" };
+const STATUS_COLORS: Record<string, string> = { pending: "#f59e0b", in_progress: "#0ea5e9", delivered: "#14b8a6", cancelled: "#8eb5c8", dispatched: "#38bdf8" };
 
 export default function ProviderPortal() {
   const [tab, setTab] = useState<"ngo" | "commercial" | "drivers">("ngo");
@@ -37,20 +37,20 @@ export default function ProviderPortal() {
 
   const advanceTask = async (id: string, nextStatus: string) => {
     await fetch(`/api/tasks/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: nextStatus }) });
-    showToast(nextStatus === "in_progress" ? "🚛 تم إرسال السائق" : "✅ تم تأكيد التسليم");
+    showToast(nextStatus === "in_progress" ? " تم إرسال السائق" : " تم تأكيد التسليم");
     load();
   };
 
   const advanceOrder = async (id: string, nextStatus: string) => {
     await fetch(`/api/orders/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: nextStatus }) });
-    showToast(nextStatus === "dispatched" ? "🚛 تم إرسال السائق للطلب" : "✅ تم تأكيد التوصيل");
+    showToast(nextStatus === "dispatched" ? " تم إرسال السائق للطلب" : " تم تأكيد التوصيل");
     load();
   };
 
   const toggleDriver = async (id: string, currentStatus: string) => {
     const newStatus = currentStatus === "active" ? "inactive" : "active";
     await fetch(`/api/drivers/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: newStatus }) });
-    showToast(newStatus === "active" ? "✅ تم تفعيل السائق" : "⏸ تم إيقاف السائق");
+    showToast(newStatus === "active" ? " تم تفعيل السائق" : " تم إيقاف السائق");
     load();
   };
 
@@ -62,9 +62,9 @@ export default function ProviderPortal() {
     <div className="portal provider-portal" dir="rtl">
       {toast && <div className="action-toast">{toast}</div>}
 
-      <div className="portal-header" style={{ background: "linear-gradient(135deg,#4c1d95,#7c3aed)" }}>
+      <div className="portal-header" style={{ background: "linear-gradient(135deg,#0284c7,#0ea5e9)" }}>
         <div className="portal-header-inner">
-          <div className="portal-role-badge">🏢 مزود الخدمة</div>
+          <div className="portal-role-badge"> مزود الخدمة</div>
           <h2 className="portal-title">FastWater Co.</h2>
           <p className="portal-subtitle">إنساني · تجاري · إدارة الأسطول والعمليات</p>
         </div>
@@ -79,12 +79,12 @@ export default function ProviderPortal() {
 
       <div className="portal-tabs">
         <button className={`ptab ${tab === "ngo" ? "ptab-active" : ""}`} onClick={() => setTab("ngo")}>
-          🤝 وضع إنساني {ngoTasks.filter(t => t.status === "pending").length > 0 && <span className="ptab-badge">{ngoTasks.filter(t => t.status === "pending").length}</span>}
+           وضع إنساني {ngoTasks.filter(t => t.status === "pending").length > 0 && <span className="ptab-badge">{ngoTasks.filter(t => t.status === "pending").length}</span>}
         </button>
         <button className={`ptab ${tab === "commercial" ? "ptab-active" : ""}`} onClick={() => setTab("commercial")}>
-          💰 وضع تجاري {commercialOrders.filter(o => o.status === "pending").length > 0 && <span className="ptab-badge">{commercialOrders.filter(o => o.status === "pending").length}</span>}
+           وضع تجاري {commercialOrders.filter(o => o.status === "pending").length > 0 && <span className="ptab-badge">{commercialOrders.filter(o => o.status === "pending").length}</span>}
         </button>
-        <button className={`ptab ${tab === "drivers" ? "ptab-active" : ""}`} onClick={() => setTab("drivers")}>🚚 الأسطول ({drivers.length})</button>
+        <button className={`ptab ${tab === "drivers" ? "ptab-active" : ""}`} onClick={() => setTab("drivers")}> الأسطول ({drivers.length})</button>
       </div>
 
       <div className="portal-body">
@@ -93,7 +93,7 @@ export default function ProviderPortal() {
         {tab === "ngo" && (
           <>
             <div className="mode-banner mode-banner-hum">
-              <span>🤝</span>
+              <span></span>
               <div>
                 <div style={{ fontWeight: 700 }}>وضع العمليات الإنسانية</div>
                 <div style={{ fontSize: 12, opacity: 0.85 }}>المهام ممولة من المنظمة — المواطن لا يدفع شيئاً</div>
@@ -107,9 +107,9 @@ export default function ProviderPortal() {
                 .slice(0, 4);
               if (!upcoming.length) return null;
               return (
-                <div style={{ background:"linear-gradient(135deg,#1e1b4b,#312e81)", borderRadius:14, padding:"16px 18px", marginBottom:18 }}>
+                <div style={{ background:"linear-gradient(135deg,#0284c7,#0ea5e9)", borderRadius:14, padding:"16px 18px", marginBottom:18 }}>
                   <div style={{ color:"rgba(255,255,255,.7)", fontSize:11, fontWeight:700, letterSpacing:.5, marginBottom:12, textTransform:"uppercase" }}>
-                    📅 أجندة العمل القادمة
+                     أجندة العمل القادمة
                   </div>
                   <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                     {upcoming.map(t => {
@@ -118,7 +118,7 @@ export default function ProviderPortal() {
                       const isToday = dt.toDateString() === new Date().toDateString();
                       return (
                         <div key={t.id} style={{ display:"flex", alignItems:"center", gap:12, background:"rgba(255,255,255,.08)", borderRadius:10, padding:"10px 14px" }}>
-                          <div style={{ background: isToday ? "#f59e0b" : "#818cf8", borderRadius:8, padding:"6px 10px", textAlign:"center", minWidth:46, flexShrink:0 }}>
+                          <div style={{ background: isToday ? "#f59e0b" : "#38bdf8", borderRadius:8, padding:"6px 10px", textAlign:"center", minWidth:46, flexShrink:0 }}>
                             <div style={{ fontWeight:800, fontSize:18, color:"#fff", lineHeight:1 }}>{dt.getDate()}</div>
                             <div style={{ fontSize:9, color:"rgba(255,255,255,.8)" }}>{dt.toLocaleDateString("ar-SY",{month:"short"})}</div>
                           </div>
@@ -127,7 +127,7 @@ export default function ProviderPortal() {
                               {zone?.name ?? t.zoneId}
                             </div>
                             <div style={{ fontSize:11, color:"rgba(255,255,255,.6)", marginTop:2 }}>
-                              🕐 {dt.toLocaleTimeString("ar-SY",{hour:"2-digit",minute:"2-digit"})} · 💧 {Number(t.quantityLiters).toLocaleString()} لتر
+                               {dt.toLocaleTimeString("ar-SY",{hour:"2-digit",minute:"2-digit"})} ·  {Number(t.quantityLiters).toLocaleString()} لتر
                             </div>
                           </div>
                           {isToday && <span style={{ background:"#f59e0b", color:"#fff", fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:20, whiteSpace:"nowrap" }}>اليوم!</span>}
@@ -142,7 +142,7 @@ export default function ProviderPortal() {
             <div className="tasks-list">
               {ngoTasks.map(t => {
                 const zone = zones.find(z => z.id === t.zoneId);
-                const color = STATUS_COLORS[t.status] ?? "#94a3b8";
+                const color = STATUS_COLORS[t.status] ?? "#8eb5c8";
                 const canDispatch = t.status === "pending";
                 const canDeliver = t.status === "in_progress";
                 return (
@@ -152,16 +152,16 @@ export default function ProviderPortal() {
                       <span style={{ color, fontSize: 12, fontWeight: 700 }}>{STATUS_LABELS[t.status]}</span>
                     </div>
                     <div className="task-row-info">
-                      <div className="task-row-zone">🗺️ {zone?.name ?? t.zoneId}</div>
+                      <div className="task-row-zone"> {zone?.name ?? t.zoneId}</div>
                       <div className="task-row-meta">
-                        💧 {Number(t.quantityLiters).toLocaleString()} لتر
-                        · 📅 {new Date(t.scheduledAt).toLocaleDateString("ar-SY")}
+                         {Number(t.quantityLiters).toLocaleString()} لتر
+                        ·  {new Date(t.scheduledAt).toLocaleDateString("ar-SY")}
                         {t.notes && <span> · {t.notes}</span>}
                       </div>
                     </div>
                     <div className="task-row-actions">
-                      {canDispatch && <button className="btn btn-dispatch" onClick={() => advanceTask(t.id, "in_progress")}>🚛 إرسال</button>}
-                      {canDeliver && <button className="btn btn-delivered" onClick={() => advanceTask(t.id, "delivered")}>✅ تأكيد التسليم</button>}
+                      {canDispatch && <button className="btn btn-dispatch" onClick={() => advanceTask(t.id, "in_progress")}> إرسال</button>}
+                      {canDeliver && <button className="btn btn-delivered" onClick={() => advanceTask(t.id, "delivered")}> تأكيد التسليم</button>}
                     </div>
                   </div>
                 );
@@ -175,7 +175,7 @@ export default function ProviderPortal() {
         {tab === "commercial" && (
           <>
             <div className="mode-banner mode-banner-com">
-              <span>💰</span>
+              <span></span>
               <div>
                 <div style={{ fontWeight: 700 }}>وضع العمليات التجارية</div>
                 <div style={{ fontSize: 12, opacity: 0.85 }}>المواطن يدفع عبر Qatra — تستلم الدفع بعد خصم رسوم المنصة 5%</div>
@@ -183,7 +183,7 @@ export default function ProviderPortal() {
             </div>
             <div className="tasks-list">
               {commercialOrders.map(o => {
-                const color = STATUS_COLORS[o.status] ?? "#94a3b8";
+                const color = STATUS_COLORS[o.status] ?? "#8eb5c8";
                 const canDispatch = o.status === "pending";
                 const canDeliver = o.status === "dispatched";
                 return (
@@ -193,16 +193,16 @@ export default function ProviderPortal() {
                       <span style={{ color, fontSize: 12, fontWeight: 700 }}>{ORDER_STATUS_LABELS[o.status] ?? o.status}</span>
                     </div>
                     <div className="task-row-info">
-                      <div className="task-row-zone">📦 طلب مواطن</div>
+                      <div className="task-row-zone"> طلب مواطن</div>
                       <div className="task-row-meta">
-                        💧 {Number(o.quantityLiters).toLocaleString()} لتر
-                        · 💵 {Number(o.totalAmount).toFixed(2)}$
-                        · 📅 {new Date(o.createdAt).toLocaleDateString("ar-SY")}
+                         {Number(o.quantityLiters).toLocaleString()} لتر
+                        ·  {Number(o.totalAmount).toFixed(2)}$
+                        ·  {new Date(o.createdAt).toLocaleDateString("ar-SY")}
                       </div>
                     </div>
                     <div className="task-row-actions">
-                      {canDispatch && <button className="btn btn-dispatch" onClick={() => advanceOrder(o.id, "dispatched")}>🚛 إرسال</button>}
-                      {canDeliver && <button className="btn btn-delivered" onClick={() => advanceOrder(o.id, "delivered")}>✅ تأكيد</button>}
+                      {canDispatch && <button className="btn btn-dispatch" onClick={() => advanceOrder(o.id, "dispatched")}> إرسال</button>}
+                      {canDeliver && <button className="btn btn-delivered" onClick={() => advanceOrder(o.id, "delivered")}> تأكيد</button>}
                     </div>
                   </div>
                 );
@@ -218,16 +218,16 @@ export default function ProviderPortal() {
             <div className="section-title">أسطول السائقين</div>
             {drivers.map(d => (
               <div key={d.id} className="driver-card">
-                <div className="driver-card-avatar" style={{ background: d.status === "active" ? "#dcfce7" : "#f1f5f9", color: d.status === "active" ? "#16a34a" : "#64748b" }}>
-                  {d.driverType === "owned" ? "👷" : "🧑"}
+                <div className="driver-card-avatar" style={{ background: d.status === "active" ? "#ecfeff" : "#eef8fd", color: d.status === "active" ? "#0891b2" : "#6b8aa0" }}>
+                  {d.driverType === "owned" ? "" : ""}
                 </div>
                 <div className="driver-card-info">
                   <div className="driver-card-name">{d.vehicleType}</div>
                   <div className="driver-card-meta">
                     <span className={`driver-type-badge ${d.driverType === "owned" ? "dt-owned" : "dt-indep"}`}>
-                      {d.driverType === "owned" ? "🔒 تابع" : "🔓 مستقل"}
+                      {d.driverType === "owned" ? " تابع" : " مستقل"}
                     </span>
-                    <span style={{ color: "#94a3b8" }}>·</span>
+                    <span style={{ color: "#8eb5c8" }}>·</span>
                     <span>{d.phone}</span>
                   </div>
                 </div>
@@ -243,8 +243,8 @@ export default function ProviderPortal() {
               </div>
             ))}
             <div className="invite-banner">
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>➕ دعوة سائق مستقل</div>
-              <div style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>يمكن دعوة سائقين مستقلين لمهام محددة دون ربطهم بشكل دائم بالشركة</div>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}> دعوة سائق مستقل</div>
+              <div style={{ fontSize: 13, color: "#6b8aa0", marginBottom: 12 }}>يمكن دعوة سائقين مستقلين لمهام محددة دون ربطهم بشكل دائم بالشركة</div>
               <button className="btn btn-outline" disabled>إرسال دعوة (قريباً)</button>
             </div>
           </>

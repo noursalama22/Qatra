@@ -12,8 +12,8 @@ const statusBadge = (s: string) => {
 };
 
 const statusDot: Record<string, string> = {
-  active: "🟢", inactive: "⚫", pending: "🟡",
-  in_progress: "🔵", delivered: "✅", cancelled: "🔴",
+  active: "", inactive: "", pending: "",
+  in_progress: "", delivered: "", cancelled: "",
 };
 
 export default function Dashboard() {
@@ -42,42 +42,42 @@ export default function Dashboard() {
   return (
     <div className="page">
       <div className="alert alert-info">
-        💧 <strong>Qatra v3 Demo</strong> — This is a live demo with sample data. All actions are simulated.
+         <strong>Qatra v3 Demo</strong> — This is a live demo with sample data. All actions are simulated.
       </div>
 
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-icon">🗺️</div>
+          <div className="stat-icon"></div>
           <div className="stat-label">Coverage Zones</div>
           <div className="stat-value">{stats!.totalZones}</div>
           <div className="stat-sub">{stats!.activeZones} active</div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon">🏢</div>
+          <div className="stat-icon"></div>
           <div className="stat-label">NGOs</div>
           <div className="stat-value">{stats!.totalNgos}</div>
           <div className="stat-sub">{stats!.approvedNgos} approved</div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon">🚛</div>
+          <div className="stat-icon"></div>
           <div className="stat-label">Providers</div>
           <div className="stat-value">{stats!.totalProviders}</div>
           <div className="stat-sub">{stats!.approvedProviders} approved</div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon">👷</div>
+          <div className="stat-icon"></div>
           <div className="stat-label">Drivers</div>
           <div className="stat-value">{stats!.totalDrivers}</div>
           <div className="stat-sub">{stats!.activeDrivers} active</div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon">📋</div>
+          <div className="stat-icon"></div>
           <div className="stat-label">Tasks</div>
           <div className="stat-value">{stats!.totalTasks}</div>
           <div className="stat-sub">{stats!.pendingTasks} pending · {stats!.inProgressTasks} in progress</div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon">💧</div>
+          <div className="stat-icon"></div>
           <div className="stat-label">Water Delivered</div>
           <div className="stat-value">{totalLiters}k L</div>
           <div className="stat-sub">{stats!.deliveredTasks} completed tasks</div>
@@ -138,7 +138,7 @@ export default function Dashboard() {
                     <div className={`progress-bar ${color === "progress-red" ? "" : ""}`}
                       style={{
                         width: `${pct}%`,
-                        background: z.signalCount > 50 ? "#dc2626" : z.signalCount > 30 ? "#d97706" : "#16a34a"
+                        background: z.signalCount > 50 ? "#dc2626" : z.signalCount > 30 ? "#d97706" : "#0891b2"
                       }} />
                   </div>
                 </div>

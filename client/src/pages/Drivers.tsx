@@ -54,7 +54,7 @@ export default function Drivers() {
           </div>
         </div>
         {filtered.length === 0 ? (
-          <div className="empty"><div className="empty-icon">👷</div><p>No drivers found.</p></div>
+          <div className="empty"><div className="empty-icon"></div><p>No drivers found.</p></div>
         ) : (
           <table>
             <thead>
@@ -79,7 +79,7 @@ export default function Drivers() {
                         {d.driverType}
                       </span>
                     </td>
-                    <td style={{ fontSize: 13 }}>🚛 {d.vehicleType}</td>
+                    <td style={{ fontSize: 13 }}> {d.vehicleType}</td>
                     <td style={{ fontSize: 12, color: "var(--gray)" }}>{d.phone}</td>
                     <td style={{ fontSize: 12 }}>{provider?.companyName ?? "Independent"}</td>
                     <td><span className={statusBadge(d.status)}>{d.status}</span></td>
@@ -87,7 +87,7 @@ export default function Drivers() {
                       {d.status === "pending" && (
                         <>
                           <button className="btn btn-sm btn-success" onClick={() => handleActivate(d.id, "active")}>Approve</button>
-                          <button className="btn btn-sm btn-danger" style={{ marginLeft: 4 }} onClick={() => handleActivate(d.id, "rejected")}>Reject</button>
+                          <button className="btn btn-sm btn-danger" style={{ marginInlineStart: 4 }} onClick={() => handleActivate(d.id, "rejected")}>Reject</button>
                         </>
                       )}
                       {d.status === "active" && (

@@ -21,11 +21,11 @@ type DriverFeature = {
 type MapData = { zones: ZoneFeature[]; drivers: DriverFeature[] };
 
 const SIGNAL_COLOR = (count: number) =>
-  count > 50 ? "#ef4444" : count > 25 ? "#f59e0b" : "#10b981";
+  count > 50 ? "#ef4444" : count > 25 ? "#f59e0b" : "#14b8a6";
 
 const TASK_STATUS_COLOR: Record<string, string> = {
-  in_progress: "#2563eb", pending: "#f59e0b",
-  delivered: "#10b981", cancelled: "#94a3b8",
+  in_progress: "#0ea5e9", pending: "#f59e0b",
+  delivered: "#14b8a6", cancelled: "#8eb5c8",
 };
 
 export default function MapView() {
@@ -68,7 +68,7 @@ export default function MapView() {
       });
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap contributors",
+        attribution: " OpenStreetMap contributors",
         maxZoom: 19,
       }).addTo(map);
 
@@ -130,7 +130,7 @@ export default function MapView() {
         const activeTasks = zone.tasks.filter(t => t.status === "in_progress");
         if (activeTasks.length > 0) {
           const pulseIcon = L.divIcon({
-            html: `<div class="pulse-ring" style="border-color:#2563eb"><div class="pulse-dot" style="background:#2563eb"></div></div>`,
+            html: `<div class="pulse-ring" style="border-color:#0ea5e9"><div class="pulse-dot" style="background:#0ea5e9"></div></div>`,
             className: "",
             iconSize: [24, 24],
             iconAnchor: [12, 12],
@@ -146,10 +146,10 @@ export default function MapView() {
         drivers.forEach(driver => {
           const isActive = driver.status === "active";
           const hasTask = !!driver.activeTask;
-          const dColor = hasTask ? "#2563eb" : isActive ? "#10b981" : "#94a3b8";
+          const dColor = hasTask ? "#0ea5e9" : isActive ? "#14b8a6" : "#8eb5c8";
           const icon = L.divIcon({
             html: `<div class="driver-pin" style="background:${dColor};${hasTask ? "animation:pulse-glow 2s infinite" : ""}">
-              <span>${hasTask ? "🚛" : "👷"}</span>
+              <span>${hasTask ? "" : ""}</span>
             </div>`,
             className: "",
             iconSize: [38, 38],
@@ -157,7 +157,7 @@ export default function MapView() {
           });
           const marker = L.marker([driver.lat, driver.lng], { icon }).addTo(layerRef.current!);
           marker.on("click", () => { setSelected(driver as any); setSelectedType("driver"); });
-          marker.bindTooltip(`<b>${driver.vehicleType}</b><br/>${hasTask ? "🚛 جارٍ التوصيل" : "متوقف"}`, { sticky: true });
+          marker.bindTooltip(`<b>${driver.vehicleType}</b><br/>${hasTask ? " جارٍ التوصيل" : "متوقف"}`, { sticky: true });
         });
       }
     });
@@ -173,12 +173,12 @@ export default function MapView() {
         <div className="map-filters">
           {(["all", "active", "drivers"] as const).map(f => (
             <button key={f} className={`filter-btn ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
-              {f === "all" ? "🗺️ الكل" : f === "active" ? "🟢 المناطق النشطة" : "🚛 السائقون فقط"}
+              {f === "all" ? " الكل" : f === "active" ? " المناطق النشطة" : " السائقون فقط"}
             </button>
           ))}
         </div>
         <div className="map-meta">
-          <span style={{ fontSize: 12, color: "#64748b" }}>
+          <span style={{ fontSize: 12, color: "#6b8aa0" }}>
             آخر تحديث: {lastRefresh.toLocaleTimeString("ar-SY")}
           </span>
           <button
@@ -186,7 +186,7 @@ export default function MapView() {
             onClick={() => setAutoRefresh(v => !v)}
             style={{ fontSize: 12 }}
           >
-            {autoRefresh ? "🔄 تلقائي" : "⏸ موقوف"}
+            {autoRefresh ? " تلقائي" : " موقوف"}
           </button>
           <button className="btn btn-outline btn-sm" onClick={fetchData}>↻ تحديث</button>
         </div>
@@ -199,12 +199,12 @@ export default function MapView() {
         {/* Legend */}
         <div className="map-legend">
           <div className="legend-title">الدليل</div>
-          <div className="legend-item"><span className="legend-dot" style={{ background: "#10b981" }} />إشارات منخفضة</div>
+          <div className="legend-item"><span className="legend-dot" style={{ background: "#14b8a6" }} />إشارات منخفضة</div>
           <div className="legend-item"><span className="legend-dot" style={{ background: "#f59e0b" }} />إشارات متوسطة</div>
           <div className="legend-item"><span className="legend-dot" style={{ background: "#ef4444" }} />إشارات عالية</div>
-          <div style={{ borderTop: "1px solid #e2e8f0", margin: "8px 0" }} />
-          <div className="legend-item"><span className="legend-dot" style={{ background: "#2563eb" }} />🚛 سائق نشط</div>
-          <div className="legend-item"><span className="legend-dot" style={{ background: "#10b981" }} />👷 سائق متوقف</div>
+          <div style={{ borderTop: "1px solid #d8eef8", margin: "8px 0" }} />
+          <div className="legend-item"><span className="legend-dot" style={{ background: "#0ea5e9" }} /> سائق نشط</div>
+          <div className="legend-item"><span className="legend-dot" style={{ background: "#14b8a6" }} /> سائق متوقف</div>
         </div>
 
         {/* Info Panel */}
@@ -213,7 +213,7 @@ export default function MapView() {
             <button className="panel-close" onClick={() => { setSelected(null); setSelectedType(null); }}>✕</button>
             {selectedType === "zone" && isZone(selected) && (
               <>
-                <div className="panel-title">🗺️ {selected.name}</div>
+                <div className="panel-title"> {selected.name}</div>
                 <div className="panel-badge" style={{ background: SIGNAL_COLOR(selected.signalCount) + "22", color: SIGNAL_COLOR(selected.signalCount) }}>
                   {selected.signalCount} إشارة احتياج
                 </div>
@@ -239,31 +239,31 @@ export default function MapView() {
                 )}
                 <div className="panel-section">مهام التوزيع</div>
                 {selected.tasks.length === 0 ? (
-                  <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>لا توجد مهام</div>
+                  <div style={{ fontSize: 12, color: "#8eb5c8", textAlign: "center", padding: "8px 0" }}>لا توجد مهام</div>
                 ) : selected.tasks.slice(0, 4).map(t => (
                   <div key={t.id} className="panel-task">
                     <span className={`badge badge-sm ${TASK_STATUS_COLOR[t.status] ? "" : "badge-gray"}`}
-                      style={{ background: (TASK_STATUS_COLOR[t.status] ?? "#94a3b8") + "22", color: TASK_STATUS_COLOR[t.status] ?? "#94a3b8", fontSize: 11 }}>
+                      style={{ background: (TASK_STATUS_COLOR[t.status] ?? "#8eb5c8") + "22", color: TASK_STATUS_COLOR[t.status] ?? "#8eb5c8", fontSize: 11 }}>
                       {t.status.replace("_", " ")}
                     </span>
                     <span style={{ fontSize: 13, fontWeight: 600 }}>{Number(t.quantityLiters).toLocaleString()} L</span>
-                    <span style={{ fontSize: 11, color: "#94a3b8" }}>{new Date(t.scheduledAt).toLocaleDateString("ar-SY")}</span>
+                    <span style={{ fontSize: 11, color: "#8eb5c8" }}>{new Date(t.scheduledAt).toLocaleDateString("ar-SY")}</span>
                   </div>
                 ))}
               </>
             )}
             {selectedType === "driver" && isDriver(selected) && (
               <>
-                <div className="panel-title">🚛 {selected.vehicleType}</div>
+                <div className="panel-title"> {selected.vehicleType}</div>
                 <div className="panel-badge" style={{
-                  background: selected.status === "active" ? "#dcfce7" : "#f1f5f9",
-                  color: selected.status === "active" ? "#16a34a" : "#64748b"
+                  background: selected.status === "active" ? "#ecfeff" : "#eef8fd",
+                  color: selected.status === "active" ? "#0891b2" : "#6b8aa0"
                 }}>
                   {selected.status === "active" ? "نشط" : selected.status}
                 </div>
                 <div className="panel-stats">
                   <div className="panel-stat">
-                    <div className="panel-stat-val" style={{ fontSize: 18 }}>{selected.driverType === "owned" ? "🏢" : "🧑"}</div>
+                    <div className="panel-stat-val" style={{ fontSize: 18 }}>{selected.driverType === "owned" ? "" : ""}</div>
                     <div className="panel-stat-label">{selected.driverType === "owned" ? "تابع" : "مستقل"}</div>
                   </div>
                 </div>
@@ -296,12 +296,12 @@ export default function MapView() {
         {data && (
           <div className="map-summary">
             <div className="summary-item">
-              <span className="summary-dot" style={{ background: "#10b981" }} />
+              <span className="summary-dot" style={{ background: "#14b8a6" }} />
               <span>{data.zones.filter(z => z.status === "active").length} مناطق نشطة</span>
             </div>
             <div className="summary-divider" />
             <div className="summary-item">
-              <span className="summary-dot" style={{ background: "#2563eb" }} />
+              <span className="summary-dot" style={{ background: "#0ea5e9" }} />
               <span>{data.drivers.length} سائق على الخريطة</span>
             </div>
             <div className="summary-divider" />
@@ -311,7 +311,7 @@ export default function MapView() {
             </div>
             <div className="summary-divider" />
             <div className="summary-item">
-              <span>🆘</span>
+              <span></span>
               <span>{data.zones.reduce((s, z) => s + z.signalCount, 0)} إشارة احتياج</span>
             </div>
           </div>

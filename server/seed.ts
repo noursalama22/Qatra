@@ -2,20 +2,34 @@ import { db } from "./db";
 import {
   usersTable, ngosTable, providersTable, driversTable, zonesTable,
   distributionTasksTable, deliveryOrdersTable, citizensTable, gpsPositionsTable,
+  userRolesTable,
 } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { scryptSync, randomBytes } from "node:crypto";
+
+function hashPassword(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, 64).toString("hex");
+  return `scrypt:${salt}:${hash}`;
+}
 
 async function seed() {
   console.log("🌱 Seeding Gaza data...");
+  const demoPasswordHash = hashPassword("qatra12345");
 
   await db.insert(usersTable).values([
-    { id: "seed-u1", email: "ops@wash-gaza.org",      firstName: "أحمد",    lastName: "أبو حسن"   },
-    { id: "seed-u2", email: "water@unrwa-gaza.org",   firstName: "سمر",     lastName: "الكحلوت"   },
-    { id: "seed-u3", email: "ops@meyah-januob.ps",    firstName: "محمود",   lastName: "الشريف"    },
-    { id: "seed-u4", email: "fleet@meyah-amal.ps",    firstName: "خالد",    lastName: "العمل"     },
-    { id: "seed-u5", email: "driver1@qatra.ps",       firstName: "يوسف",    lastName: "البطران"   },
-    { id: "seed-u6", email: "driver2@qatra.ps",       firstName: "نادر",    lastName: "أبو عوض"   },
-    { id: "seed-u7", email: "citizen1@qatra.ps",      firstName: "فاطمة",   lastName: "الغلبان"   },
+    { id: "seed-u1", email: "ops@wash-gaza.org",      firstName: "أحمد",    lastName: "أبو حسن", passwordHash: demoPasswordHash },
+    { id: "seed-u2", email: "water@unrwa-gaza.org",   firstName: "سمر",     lastName: "الكحلوت", passwordHash: demoPasswordHash },
+    { id: "seed-u3", email: "ops@meyah-januob.ps",    firstName: "محمود",   lastName: "الشريف", passwordHash: demoPasswordHash },
+    { id: "seed-u4", email: "fleet@meyah-amal.ps",    firstName: "خالد",    lastName: "العمل", passwordHash: demoPasswordHash },
+    { id: "seed-u5", email: "driver1@qatra.ps",       firstName: "يوسف",    lastName: "البطران", passwordHash: demoPasswordHash },
+    { id: "seed-u6", email: "driver2@qatra.ps",       firstName: "نادر",    lastName: "أبو عوض", passwordHash: demoPasswordHash },
+    { id: "seed-u7", email: "citizen1@qatra.ps",      firstName: "فاطمة",   lastName: "الغلبان", passwordHash: demoPasswordHash },
   ]).onConflictDoNothing();
+
+  for (const id of ["seed-u1", "seed-u2", "seed-u3", "seed-u4", "seed-u5", "seed-u6", "seed-u7"]) {
+    await db.update(usersTable).set({ passwordHash: demoPasswordHash }).where(eq(usersTable.id, id));
+  }
 
   await db.insert(ngosTable).values([
     { id: "seed-n1", userId: "seed-u1", orgName: "برنامج WASH غزة",       contactEmail: "ops@wash-gaza.org",    country: "فلسطين", status: "approved", description: "توزيع مياه الشرب النظيفة لسكان قطاع غزة" },
@@ -107,6 +121,16 @@ async function seed() {
 
   await db.insert(citizensTable).values([
     { id: "seed-c1", userId: "seed-u7", zoneId: "seed-z1" },
+  ]).onConflictDoNothing();
+
+  await db.insert(userRolesTable).values([
+    { id: "seed-r1", userId: "seed-u1", role: "admin", status: "approved" },
+    { id: "seed-r2", userId: "seed-u2", role: "ngo", status: "approved", profileId: "seed-n2" },
+    { id: "seed-r3", userId: "seed-u3", role: "provider", status: "approved", profileId: "seed-p1" },
+    { id: "seed-r4", userId: "seed-u4", role: "provider", status: "approved", profileId: "seed-p2" },
+    { id: "seed-r5", userId: "seed-u5", role: "driver", status: "approved", profileId: "seed-d1" },
+    { id: "seed-r6", userId: "seed-u6", role: "driver", status: "approved", profileId: "seed-d2" },
+    { id: "seed-r7", userId: "seed-u7", role: "citizen", status: "approved", profileId: "seed-c1" },
   ]).onConflictDoNothing();
 
   await db.insert(distributionTasksTable).values([
