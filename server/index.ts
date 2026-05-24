@@ -10,7 +10,7 @@ import {
   distributionTasksTable, deliveryOrdersTable, usersTable,
   citizensTable, signalsTable, gpsPositionsTable,
   userRolesTable, contractsTable, trucksTable, providerDriverInvitesTable,
-  userRolesTable, regionsTable, providerRegionRatesTable, ngoContractsTable,
+  regionsTable, providerRegionRatesTable, ngoContractsTable,
 } from "@shared/schema";
 import { eq, count, sum, sql, desc, and, inArray } from "drizzle-orm";
 
@@ -950,6 +950,10 @@ app.get("/api/trucks", async (req, res) => {
       return res.json({ data, total: data.length });
     }
     const data = await db.select().from(trucksTable).orderBy(trucksTable.createdAt);
+    res.json({ data, total: data.length });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 // ── Regions & NGO Contracts ────────────────────────────────────────────────
 
 app.get("/api/regions", async (_req, res) => {
@@ -1162,6 +1166,9 @@ app.patch("/api/contracts/:id", async (req, res) => {
       .returning();
     if (!updated) return res.status(404).json({ error: "Not found" });
     res.json(updated);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 app.get("/api/regions/:regionId/providers", async (req, res) => {
   try {
     const { regionId } = req.params;

@@ -26,7 +26,7 @@ export const userRoleEnum = pgEnum("user_role", ["admin", "ngo", "provider", "dr
 export const zoneStatusEnum = pgEnum("zone_status", ["active", "inactive"]);
 export const paymentRelatedTypeEnum = pgEnum("payment_related_type", ["delivery_order", "subscription"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "completed", "failed", "refunded"]);
-export const contractStatusEnum = pgEnum("contract_status", ["active", "pending", "expired", "cancelled"]);
+export const ngoContractStatusEnum = pgEnum("ngo_contract_status", ["active", "pending", "expired", "cancelled"]);
 
 // ── Sessions (Replit Auth required) ───────────────────────────────────────────
 
@@ -218,7 +218,7 @@ export const ngoContractsTable = pgTable(
     regionId: varchar("region_id").notNull().references(() => regionsTable.id, { onDelete: "cascade" }),
     dailyQuantityLiters: numeric("daily_quantity_liters", { precision: 12, scale: 2 }).notNull(),
     pricePerLiter: numeric("price_per_liter", { precision: 10, scale: 4 }).notNull(),
-    status: contractStatusEnum("status").notNull().default("active"),
+    status: ngoContractStatusEnum("status").notNull().default("active"),
     startDate: timestamp("start_date", { withTimezone: true }).notNull().defaultNow(),
     endDate: timestamp("end_date", { withTimezone: true }),
     notes: text("notes"),
@@ -493,7 +493,7 @@ export type Truck = typeof trucksTable.$inferSelect;
 
 // ── Contracts ─────────────────────────────────────────────────────────────────
 
-export const contractStatusEnum = pgEnum("contract_status", ["review", "active", "rejected"]);
+export const contractStatusEnum = pgEnum("provider_contract_status", ["review", "active", "rejected"]);
 export const contractPriorityEnum = pgEnum("contract_priority", ["normal", "high", "vip"]);
 
 export const contractsTable = pgTable(
