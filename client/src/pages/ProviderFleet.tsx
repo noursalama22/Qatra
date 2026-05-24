@@ -238,6 +238,8 @@ export default function ProviderFleet() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
   const [dispatchDriver, setDispatchDriver] = useState<DriverEntry | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<DriverEntry | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadDrivers = () =>
@@ -262,6 +264,19 @@ export default function ProviderFleet() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: newStatus }),
     });
+    await loadDrivers();
+  };
+
+  const confirmCancelInvite = async () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    await fetch(`/api/provider-driver-invites/${cancelTarget.id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "expired" }),
+    });
+    setCancelTarget(null);
+    setCancelling(false);
     await loadDrivers();
   };
 
@@ -450,51 +465,63 @@ export default function ProviderFleet() {
                 {/* Card Actions */}
                 <div style={{ padding: "10px 16px 14px", display: "flex", gap: 7, flexWrap: "wrap" }}>
 
-                  {/* Dispatch button — shown for active drivers; disabled when incomplete */}
-                  {(driver.status === "active") && (
+                  {/* ── INCOMPLETE PROFILE: only "إلغاء الدعوة" ── */}
+                  {isIncomplete && (
                     <button
-                      onClick={() => canDispatch && setDispatchDriver(driver)}
-                      disabled={!canDispatch}
-                      title={!canDispatch ? "يجب على السائق إكمال بيانات شاحنته أولاً" : undefined}
-                      style={{
-                        flex: 2, padding: "9px 0", borderRadius: 8, fontSize: 12, fontWeight: 700,
-                        cursor: canDispatch ? "pointer" : "not-allowed",
-                        background: canDispatch ? "linear-gradient(135deg,#0284c7,#0ea5e9)" : "#e5e7eb",
-                        color: canDispatch ? "white" : "#9ca3af",
-                        border: "none",
-                        opacity: canDispatch ? 1 : 0.8,
-                      }}
+                      onClick={() => setCancelTarget(driver)}
+                      style={{ flex: 1, padding: "9px 0", background: "white", color: "#6b7280", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
                     >
-                      🗺️ تعيين لمهمة
+                      إلغاء الدعوة
                     </button>
                   )}
 
-                  {/* Invited: resend + activate */}
-                  {driver.status === "invited" && <>
-                    <button onClick={() => handleDriverAction(driver, "resend")}
-                      style={{ flex: 1, padding: "9px 0", background: "#fef3c7", color: "#d97706", border: "1px solid #fcd34d", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                      إعادة إرسال
-                    </button>
-                    <button onClick={() => handleDriverAction(driver, "activate")}
-                      style={{ flex: 1, padding: "9px 0", background: "#ecfeff", color: "#0891b2", border: "1px solid #67e8f9", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                      تفعيل
-                    </button>
-                  </>}
-
-                  {/* Active: suspend */}
-                  {driver.status === "active" && (
-                    <button onClick={() => handleDriverAction(driver, "suspend")}
-                      style={{ flex: 1, padding: "9px 0", background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                      إيقاف
-                    </button>
+                  {/* ── ACTIVE + COMPLETE: dispatch (enabled) + suspend ── */}
+                  {canDispatch && (
+                    <>
+                      <button
+                        onClick={() => setDispatchDriver(driver)}
+                        style={{ flex: 2, padding: "9px 0", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", background: "linear-gradient(135deg,#0284c7,#0ea5e9)", color: "white", border: "none" }}
+                      >
+                        🗺️ تعيين لمهمة
+                      </button>
+                      <button
+                        onClick={() => handleDriverAction(driver, "suspend")}
+                        style={{ flex: 1, padding: "9px 0", background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                      >
+                        إيقاف
+                      </button>
+                    </>
                   )}
 
-                  {/* Suspended: reactivate */}
+                  {/* ── INVITED (pending): resend + activate ── */}
+                  {driver.status === "invited" && (
+                    <>
+                      <button onClick={() => handleDriverAction(driver, "resend")}
+                        style={{ flex: 1, padding: "9px 0", background: "#fef3c7", color: "#d97706", border: "1px solid #fcd34d", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                        إعادة إرسال
+                      </button>
+                      <button onClick={() => handleDriverAction(driver, "activate")}
+                        style={{ flex: 1, padding: "9px 0", background: "#ecfeff", color: "#0891b2", border: "1px solid #67e8f9", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                        تفعيل
+                      </button>
+                    </>
+                  )}
+
+                  {/* ── SUSPENDED: dispatch (disabled) + reactivate ── */}
                   {driver.status === "suspended" && (
-                    <button onClick={() => handleDriverAction(driver, "activate")}
-                      style={{ flex: 1, padding: "9px 0", background: "#ecfeff", color: "#0891b2", border: "1px solid #67e8f9", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                      إعادة تفعيل
-                    </button>
+                    <>
+                      <button
+                        disabled
+                        title="لا يمكن تعيين سائق موقوف لمهمة"
+                        style={{ flex: 2, padding: "9px 0", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "not-allowed", background: "#e5e7eb", color: "#9ca3af", border: "none", opacity: 0.8 }}
+                      >
+                        🗺️ تعيين لمهمة
+                      </button>
+                      <button onClick={() => handleDriverAction(driver, "activate")}
+                        style={{ flex: 1, padding: "9px 0", background: "#ecfeff", color: "#0891b2", border: "1px solid #67e8f9", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                        إعادة تفعيل
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -514,6 +541,41 @@ export default function ProviderFleet() {
       )}
       {dispatchDriver && (
         <DispatchModal driver={dispatchDriver} onClose={() => setDispatchDriver(null)} />
+      )}
+
+      {/* ── Cancel Invite Confirmation ── */}
+      {cancelTarget && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 220, backdropFilter: "blur(3px)", padding: "20px" }} onClick={() => !cancelling && setCancelTarget(null)}>
+          <div style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 420, padding: "32px 28px", display: "flex", flexDirection: "column", gap: 18 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>⚠️</div>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: "#12384f", margin: "0 0 6px" }}>إلغاء الدعوة</h3>
+                <p style={{ fontSize: 13, color: "#6b7280", margin: 0, lineHeight: 1.6 }}>
+                  هل أنت متأكد من إلغاء دعوة <strong>{cancelTarget.fullName}</strong>؟
+                  <br />
+                  سيتم حذف الدعوة ولن يتمكن من إنشاء حسابه.
+                </p>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setCancelTarget(null)}
+                disabled={cancelling}
+                style={{ flex: 1, padding: "11px 0", borderRadius: 10, background: "#f8fcff", color: "#6b7280", border: "1px solid #d1d5db", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+              >
+                تراجع
+              </button>
+              <button
+                onClick={confirmCancelInvite}
+                disabled={cancelling}
+                style={{ flex: 1, padding: "11px 0", borderRadius: 10, background: cancelling ? "#e5e7eb" : "#dc2626", color: cancelling ? "#9ca3af" : "white", border: "none", fontSize: 13, fontWeight: 700, cursor: cancelling ? "not-allowed" : "pointer" }}
+              >
+                {cancelling ? "جارٍ الإلغاء..." : "نعم، إلغاء الدعوة"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

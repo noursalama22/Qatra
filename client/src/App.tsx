@@ -353,6 +353,7 @@ export default function App() {
     return <DriverInvite />;
   }
 
+
   if (authLoading) {
     return (
       <div className="loading auth-loading">
