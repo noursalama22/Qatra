@@ -165,6 +165,24 @@ const CITIZEN_TASKS_MOCK: CitizenTask[] = [
 
 const REGIONS = ["الكل", "شمال غزة", "مدينة غزة", "الوسطى", "خان يونس", "رفح"];
 
+type DriverOption = {
+  id: string;
+  name: string;
+  plate: string;
+  capacityLiters: number;
+  region: string;
+  vehicleType: string;
+  status: "active";
+};
+
+const ACTIVE_DRIVERS: DriverOption[] = [
+  { id: "d1", name: "يوسف البطران",  plate: "GZ-4821", capacityLiters: 5000,  region: "شمال غزة",  vehicleType: "خزان مياه",    status: "active" },
+  { id: "d2", name: "نادر أبو عوض",  plate: "GZ-7711", capacityLiters: 1000,  region: "مدينة غزة", vehicleType: "بيكب",          status: "active" },
+  { id: "d3", name: "محمد الشريف",   plate: "GZ-3305", capacityLiters: 3000,  region: "الوسطى",    vehicleType: "صهريج متوسط",   status: "active" },
+  { id: "d4", name: "حسام العمل",    plate: "GZ-9102", capacityLiters: 8000,  region: "خان يونس",  vehicleType: "صهريج كبير",    status: "active" },
+  { id: "d5", name: "خالد الغول",    plate: "GZ-6640", capacityLiters: 2000,  region: "رفح",       vehicleType: "خزان مياه",    status: "active" },
+];
+
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("ar-AE", { day: "2-digit", month: "long", year: "numeric" });
 }
@@ -292,6 +310,34 @@ const COUNTER_CARD_STYLES: Record<CounterCardVariant, {
   },
 };
 
+const COUNTER_ICONS: Record<CounterCardVariant, React.ReactNode> = {
+  neutral: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b8aa0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+      <rect x="9" y="3" width="6" height="4" rx="1"/>
+      <line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>
+    </svg>
+  ),
+  warning: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EF9F27" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>
+  ),
+  teal: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1" y="3" width="15" height="13" rx="1"/>
+      <path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+    </svg>
+  ),
+  green: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#639922" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+      <polyline points="22 4 12 14.01 9 11.01"/>
+    </svg>
+  ),
+};
+
 function CounterCard({ label, value, variant = "neutral" }: { label: string; value: number; variant?: CounterCardVariant }) {
   const s = COUNTER_CARD_STYLES[variant];
   return (
@@ -304,7 +350,10 @@ function CounterCard({ label, value, variant = "neutral" }: { label: string; val
       flex: 1,
       minWidth: 0,
     }}>
-      <div style={{ fontSize: 11, color: s.labelColor, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.4px" }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+        {COUNTER_ICONS[variant]}
+        <div style={{ fontSize: 11, color: s.labelColor, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.4px" }}>{label}</div>
+      </div>
       <div style={{ fontSize: 28, fontWeight: 500, color: s.valueColor }}>{value}</div>
     </div>
   );
@@ -504,6 +553,191 @@ function Timeline({ items }: { items: { label: string; date: string; note?: stri
   );
 }
 
+type AssignTarget = { taskId: string; taskLabel: string; region: string; quantity: number; type: "ngo" | "citizen" };
+
+function AssignDriverModal({
+  target,
+  onClose,
+  onConfirm,
+}: {
+  target: AssignTarget;
+  onClose: () => void;
+  onConfirm: (driver: DriverOption) => void;
+}) {
+  const [step, setStep] = useState<"select" | "confirm">("select");
+  const [selected, setSelected] = useState<DriverOption | null>(null);
+
+  const now = new Date().toLocaleString("ar-AE", { dateStyle: "short", timeStyle: "short" });
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, backdropFilter: "blur(2px)" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 520, maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ background: "linear-gradient(135deg, #0f3d5c 0%, #0284c7 100%)", padding: "20px 24px", color: "#fff", position: "relative", flexShrink: 0 }}>
+          <button
+            onClick={onClose}
+            style={{ position: "absolute", top: 14, left: 14, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 30, height: 30, color: "#fff", cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}
+          >×</button>
+          <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
+            {step === "select" ? "الخطوة 1 من 2 — اختر السائق" : "الخطوة 2 من 2 — تأكيد التعيين"}
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>تعيين سائق</div>
+          <div style={{ fontSize: 12, opacity: 0.75, marginTop: 3 }}>{target.taskLabel} · {target.region} · {fmtVol(target.quantity)}</div>
+          {/* Step indicator */}
+          <div style={{ display: "flex", gap: 6, marginTop: 14 }}>
+            {[1, 2].map(n => (
+              <div key={n} style={{ height: 3, flex: 1, borderRadius: 2, background: (step === "select" ? n <= 1 : n <= 2) ? "#fff" : "rgba(255,255,255,0.3)" }} />
+            ))}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
+          {step === "select" && (
+            <>
+              <p style={{ fontSize: 13, color: "#6b8aa0", marginBottom: 16 }}>
+                اختر أحد السائقين النشطين أدناه لتعيينه على هذه المهمة.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {ACTIVE_DRIVERS.map(driver => {
+                  const isSelected = selected?.id === driver.id;
+                  return (
+                    <button
+                      key={driver.id}
+                      type="button"
+                      onClick={() => setSelected(driver)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 14,
+                        padding: "14px 16px", borderRadius: 12, cursor: "pointer",
+                        border: isSelected ? "2px solid #0284c7" : "2px solid #d8eef8",
+                        background: isSelected ? "#f0f9ff" : "#fafcff",
+                        textAlign: "right", fontFamily: "inherit", width: "100%",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      <div style={{
+                        width: 38, height: 38, borderRadius: "50%", flexShrink: 0,
+                        background: isSelected ? "#0284c7" : "#d8eef8",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        color: isSelected ? "#fff" : "#6b8aa0", fontWeight: 800, fontSize: 14,
+                      }}>
+                        {driver.name.charAt(0)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: isSelected ? "#0f3d5c" : "#12384f" }}>{driver.name}</div>
+                        <div style={{ fontSize: 12, color: "#6b8aa0", marginTop: 2, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                          <span>🚗 {driver.plate}</span>
+                          <span>💧 {driver.capacityLiters.toLocaleString("ar-AE")} لتر</span>
+                          <span>📍 {driver.region}</span>
+                          <span>🚛 {driver.vehicleType}</span>
+                        </div>
+                      </div>
+                      <div style={{
+                        width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                        border: isSelected ? "none" : "2px solid #d8eef8",
+                        background: isSelected ? "#0284c7" : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        {isSelected && (
+                          <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                            <polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {step === "confirm" && selected && (
+            <>
+              <p style={{ fontSize: 13, color: "#6b8aa0", marginBottom: 16 }}>
+                راجع التفاصيل أدناه قبل تأكيد التعيين. لا يمكن التراجع عن هذا الإجراء.
+              </p>
+
+              {/* Task summary */}
+              <div style={{ background: "#f8fcff", border: "1px solid #d8eef8", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
+                <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>المهمة</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {[
+                    { label: "الرقم المرجعي", value: target.taskLabel },
+                    { label: "المنطقة", value: target.region },
+                    { label: "الكمية", value: fmtVol(target.quantity) },
+                    { label: "وقت التعيين", value: now },
+                  ].map(row => (
+                    <div key={row.label}>
+                      <div style={{ fontSize: 10, color: "#6b8aa0", fontWeight: 600, marginBottom: 2 }}>{row.label}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{row.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Driver summary */}
+              <div style={{ background: "#f0f9ff", border: "2px solid #0284c7", borderRadius: 10, padding: "14px 16px" }}>
+                <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>السائق المُعيَّن</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: "50%", background: "#0284c7", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 16, flexShrink: 0 }}>
+                    {selected.name.charAt(0)}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: "#0f3d5c" }}>{selected.name}</div>
+                    <div style={{ fontSize: 12, color: "#6b8aa0", marginTop: 3, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                      <span>🚗 {selected.plate}</span>
+                      <span>💧 {selected.capacityLiters.toLocaleString("ar-AE")} لتر</span>
+                      <span>📍 {selected.region}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "16px 24px", borderTop: "1px solid #d8eef8", display: "flex", gap: 10, flexShrink: 0 }}>
+          {step === "select" ? (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{ flex: 1, padding: "11px 0", border: "1px solid #d8eef8", borderRadius: 8, background: "#fff", color: "#6b8aa0", fontFamily: "inherit", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+              >إلغاء</button>
+              <button
+                type="button"
+                disabled={!selected}
+                onClick={() => setStep("confirm")}
+                style={{ flex: 2, padding: "11px 0", border: "none", borderRadius: 8, background: selected ? "#0284c7" : "#d8eef8", color: selected ? "#fff" : "#94a3b8", fontFamily: "inherit", fontWeight: 700, fontSize: 14, cursor: selected ? "pointer" : "not-allowed", transition: "all 0.15s" }}
+              >التالي — تأكيد السائق</button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setStep("select")}
+                style={{ flex: 1, padding: "11px 0", border: "1px solid #d8eef8", borderRadius: 8, background: "#fff", color: "#6b8aa0", fontFamily: "inherit", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+              >← رجوع</button>
+              <button
+                type="button"
+                onClick={() => selected && onConfirm(selected)}
+                style={{ flex: 2, padding: "11px 0", border: "none", borderRadius: 8, background: "#0284c7", color: "#fff", fontFamily: "inherit", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+              >✓ تأكيد التعيين</button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type FilterBarProps = {
   statusFilter: string;
   setStatusFilter: (v: string) => void;
@@ -600,6 +834,7 @@ export default function ProviderTasks() {
   const [citSearch, setCitSearch] = useState("");
   const [selectedCitTask, setSelectedCitTask] = useState<CitizenTask | null>(null);
   const [citTasks, setCitTasks] = useState<CitizenTask[]>(CITIZEN_TASKS_MOCK);
+  const [assignTarget, setAssignTarget] = useState<AssignTarget | null>(null);
 
   const filteredNgo = ngoTasks.filter(t => {
     if (ngoStatus !== "all" && t.status !== ngoStatus) return false;
@@ -647,6 +882,28 @@ export default function ProviderTasks() {
   const handleCitApprove = (id: string) => {
     setCitTasks(prev => prev.map(t => t.id === id ? { ...t, deliveryApproved: true } : t));
     if (selectedCitTask?.id === id) setSelectedCitTask(prev => prev ? { ...prev, deliveryApproved: true } : null);
+  };
+
+  const nowLabel = () => new Date().toLocaleString("ar-AE", { dateStyle: "short", timeStyle: "short" });
+
+  const handleAssignConfirm = (driver: DriverOption) => {
+    if (!assignTarget) return;
+    const driverData = { name: driver.name, plate: driver.plate, region: driver.region };
+    const timeEntry = { label: "تعيين السائق", date: nowLabel() };
+    if (assignTarget.type === "ngo") {
+      setNgoTasks(prev => prev.map(t =>
+        t.id === assignTarget.taskId
+          ? { ...t, status: "accepted" as const, driver: driverData, timeline: [...t.timeline, timeEntry] }
+          : t
+      ));
+    } else {
+      setCitTasks(prev => prev.map(t =>
+        t.id === assignTarget.taskId
+          ? { ...t, status: "accepted" as const, driver: driverData, timeline: [...t.timeline, timeEntry] }
+          : t
+      ));
+    }
+    setAssignTarget(null);
   };
 
   const thStyle: React.CSSProperties = {
@@ -749,8 +1006,13 @@ export default function ProviderTasks() {
                             status={task.status}
                             approved={task.deliveryApproved}
                             onAction={action => {
-                              if (action === "approve") handleNgoApprove(task.id);
-                              else setSelectedNgoTask(task);
+                              if (action === "assign") {
+                                setAssignTarget({ taskId: task.id, taskLabel: task.tripNumber, region: task.region, quantity: task.quantityLiters, type: "ngo" });
+                              } else if (action === "approve") {
+                                handleNgoApprove(task.id);
+                              } else {
+                                setSelectedNgoTask(task);
+                              }
                             }}
                           />
                         </td>
@@ -833,8 +1095,13 @@ export default function ProviderTasks() {
                             status={task.status}
                             approved={task.deliveryApproved}
                             onAction={action => {
-                              if (action === "approve") handleCitApprove(task.id);
-                              else setSelectedCitTask(task);
+                              if (action === "assign") {
+                                setAssignTarget({ taskId: task.id, taskLabel: task.orderNumber, region: task.region, quantity: task.quantityLiters, type: "citizen" });
+                              } else if (action === "approve") {
+                                handleCitApprove(task.id);
+                              } else {
+                                setSelectedCitTask(task);
+                              }
                             }}
                           />
                         </td>
@@ -861,6 +1128,14 @@ export default function ProviderTasks() {
           task={selectedCitTask}
           onClose={() => setSelectedCitTask(null)}
           onApprove={id => { handleCitApprove(id); setSelectedCitTask(null); }}
+        />
+      )}
+
+      {assignTarget && (
+        <AssignDriverModal
+          target={assignTarget}
+          onClose={() => setAssignTarget(null)}
+          onConfirm={handleAssignConfirm}
         />
       )}
     </div>
