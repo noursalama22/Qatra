@@ -1063,8 +1063,12 @@ app.get("/api/provider-drivers", async (req, res) => {
     const normalizedInvites = invites.map(inv => ({
       id: inv.id,
       fullName: inv.fullName,
+      email: inv.email,
       phone: inv.phone,
       zone: inv.zone ?? "غير محدد",
+      plateNumber: inv.plateNumber,
+      vehicleModel: inv.vehicleModel,
+      capacityLiters: inv.capacityLiters,
       status: inv.status === "accepted" ? "active" : inv.status === "expired" ? "suspended" : "invited",
       lastActivityAt: null,
       source: "invite",
@@ -1078,11 +1082,7 @@ app.get("/api/provider-drivers", async (req, res) => {
 
 app.post("/api/provider-driver-invites", async (req, res) => {
   try {
-    const {
-      fullName, email, phone, zone, idNumber,
-      plateNumber, vehicleModel, capacityLiters, vehicleYear, vehicleNotes,
-      providerId, providerName,
-    } = req.body;
+    const { fullName, email, phone, zone, idNumber, providerId, providerName } = req.body;
     if (!fullName || !email || !providerId) return res.status(400).json({ error: "fullName, email, providerId required" });
 
     const { randomBytes } = await import("node:crypto");
@@ -1094,11 +1094,6 @@ app.post("/api/provider-driver-invites", async (req, res) => {
       phone: phone || null,
       zone: zone || null,
       idNumber: idNumber || null,
-      plateNumber: plateNumber || null,
-      vehicleModel: vehicleModel || null,
-      capacityLiters: capacityLiters ? Number(capacityLiters) : null,
-      vehicleYear: vehicleYear ? Number(vehicleYear) : null,
-      vehicleNotes: vehicleNotes || null,
       providerId,
       providerName: providerName || null,
       token,
@@ -1130,6 +1125,33 @@ app.post("/api/provider-driver-invites/:token/accept", async (req, res) => {
       .where(eq(providerDriverInvitesTable.token, req.params.token));
 
     res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.patch("/api/provider-driver-invites/:token/vehicle", async (req, res) => {
+  try {
+    const [invite] = await db.select().from(providerDriverInvitesTable)
+      .where(eq(providerDriverInvitesTable.token, req.params.token));
+    if (!invite) return res.status(404).json({ error: "رابط الدعوة غير صالح" });
+    if (invite.status === "expired") return res.status(400).json({ error: "انتهت صلاحية الدعوة" });
+
+    const { plateNumber, vehicleModel, vehicleYear, capacityLiters, vehicleNotes } = req.body;
+    if (!plateNumber || !vehicleModel || !vehicleYear || !capacityLiters) {
+      return res.status(400).json({ error: "رقم اللوحة والموديل والسنة والسعة مطلوبة" });
+    }
+
+    const [updated] = await db.update(providerDriverInvitesTable)
+      .set({
+        plateNumber,
+        vehicleModel,
+        vehicleYear: Number(vehicleYear),
+        capacityLiters: Number(capacityLiters),
+        vehicleNotes: vehicleNotes || null,
+      })
+      .where(eq(providerDriverInvitesTable.token, req.params.token))
+      .returning();
+
+    res.json(updated);
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 

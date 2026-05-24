@@ -57,10 +57,7 @@ function InviteDriverModal({ onClose, onSent }: { onClose: () => void; onSent: (
     "رفح", "تل السلطان", "البرازيل",
   ];
 
-  const [form, setForm] = useState({
-    fullName: "", email: "", phone: "", idNumber: "", zone: "",
-    plateNumber: "", vehicleModel: "", capacityLiters: "", vehicleYear: "", vehicleNotes: "",
-  });
+  const [form, setForm] = useState({ fullName: "", email: "", phone: "", idNumber: "", zone: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,11 +79,6 @@ function InviteDriverModal({ onClose, onSent }: { onClose: () => void; onSent: (
           phone: form.phone.trim() || null,
           idNumber: form.idNumber.trim() || null,
           zone: form.zone || null,
-          plateNumber: form.plateNumber.trim() || null,
-          vehicleModel: form.vehicleModel.trim() || null,
-          capacityLiters: form.capacityLiters ? Number(form.capacityLiters) : null,
-          vehicleYear: form.vehicleYear ? Number(form.vehicleYear) : null,
-          vehicleNotes: form.vehicleNotes.trim() || null,
           providerId: DEMO_PROVIDER_ID,
           providerName: DEMO_PROVIDER_NAME,
         }),
@@ -111,75 +103,49 @@ function InviteDriverModal({ onClose, onSent }: { onClose: () => void; onSent: (
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(3px)", padding: "20px" }} onClick={onClose}>
-      <form style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 520, padding: "28px 28px 24px", display: "flex", flexDirection: "column", gap: 16, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()} onSubmit={submit}>
+      <form style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 460, padding: "28px 28px 24px", display: "flex", flexDirection: "column", gap: 14 }} onClick={e => e.stopPropagation()} onSubmit={submit}>
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <div>
             <h3 style={{ fontSize: 17, fontWeight: 800, color: "#12384f", margin: "0 0 3px" }}>دعوة سائق جديد</h3>
-            <p style={{ fontSize: 12, color: "#6b8aa0", margin: 0 }}>سيصله رابط الدعوة على بريده الإلكتروني لإتمام إنشاء حسابه.</p>
+            <p style={{ fontSize: 12, color: "#6b8aa0", margin: 0 }}>سيصله رابط الدعوة على بريده الإلكتروني ليكمل إنشاء حسابه وإدخال بيانات شاحنته.</p>
           </div>
-          <button type="button" onClick={onClose} style={{ background: "#f0f9ff", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", fontSize: 16, color: "#6b8aa0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>×</button>
+          <button type="button" onClick={onClose} style={{ background: "#f0f9ff", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", fontSize: 16, color: "#6b8aa0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginRight: 8 }}>×</button>
         </div>
 
-        {/* Section: Driver Info */}
-        <div style={{ background: "#f8fcff", border: "1px solid #e0f0fa", borderRadius: 12, padding: "16px" }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: "#0284c7", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
-            👤 بيانات السائق
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label style={labelStyle}>الاسم الكامل *</label>
-              <input value={form.fullName} onChange={e => set("fullName", e.target.value)} placeholder="مثال: محمد أحمد الشريف" style={inputStyle} />
-            </div>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label style={labelStyle}>البريد الإلكتروني * (لإرسال الدعوة)</label>
-              <input type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="مثال: driver@example.com" style={{ ...inputStyle, direction: "ltr" }} />
-            </div>
-            <div>
-              <label style={labelStyle}>رقم الهاتف (اختياري)</label>
-              <input value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+970-599-000-000" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>رقم الهوية (اختياري)</label>
-              <input value={form.idNumber} onChange={e => set("idNumber", e.target.value)} placeholder="رقم الهوية الوطنية" style={inputStyle} />
-            </div>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label style={labelStyle}>المنطقة (اختياري)</label>
-              <select value={form.zone} onChange={e => set("zone", e.target.value)} style={{ ...inputStyle, color: form.zone ? "#12384f" : "#8eb5c8" }}>
-                <option value="">اختر المنطقة...</option>
-                {GAZA_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
-              </select>
-            </div>
+        {/* Two-phase notice */}
+        <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "10px 14px", display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>ℹ️</span>
+          <div style={{ fontSize: 12, color: "#0369a1", lineHeight: 1.6 }}>
+            <strong>خطوتان:</strong> أنت تُرسل الدعوة فقط. السائق هو من يُدخل بيانات شاحنته بعد قبول الدعوة.
           </div>
         </div>
 
-        {/* Section: Vehicle Info */}
-        <div style={{ background: "#f8fcff", border: "1px solid #e0f0fa", borderRadius: 12, padding: "16px" }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: "#0284c7", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
-            🚛 بيانات الشاحنة
+        {/* Fields */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={labelStyle}>الاسم الكامل *</label>
+            <input value={form.fullName} onChange={e => set("fullName", e.target.value)} placeholder="مثال: محمد أحمد الشريف" style={inputStyle} />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label style={labelStyle}>رقم اللوحة</label>
-              <input value={form.plateNumber} onChange={e => set("plateNumber", e.target.value)} placeholder="مثال: د-44291" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>موديل الشاحنة</label>
-              <input value={form.vehicleModel} onChange={e => set("vehicleModel", e.target.value)} placeholder="مثال: ميتسوبيشي كانتر" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>السعة (لتر)</label>
-              <input type="number" min="0" value={form.capacityLiters} onChange={e => set("capacityLiters", e.target.value)} placeholder="مثال: 10000" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>سنة الصنع</label>
-              <input type="number" min="1990" max="2030" value={form.vehicleYear} onChange={e => set("vehicleYear", e.target.value)} placeholder="مثال: 2020" style={inputStyle} />
-            </div>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label style={labelStyle}>ملاحظات الشاحنة (اختياري)</label>
-              <input value={form.vehicleNotes} onChange={e => set("vehicleNotes", e.target.value)} placeholder="أي تفاصيل إضافية..." style={inputStyle} />
-            </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={labelStyle}>البريد الإلكتروني * — لإرسال رابط الدعوة</label>
+            <input type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="driver@example.com" style={{ ...inputStyle, direction: "ltr" }} />
+          </div>
+          <div>
+            <label style={labelStyle}>رقم الهاتف (اختياري)</label>
+            <input value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+970-599-000-000" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>رقم الهوية (اختياري)</label>
+            <input value={form.idNumber} onChange={e => set("idNumber", e.target.value)} placeholder="رقم الهوية الوطنية" style={inputStyle} />
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={labelStyle}>المنطقة (اختياري)</label>
+            <select value={form.zone} onChange={e => set("zone", e.target.value)} style={{ ...inputStyle, color: form.zone ? "#12384f" : "#8eb5c8" }}>
+              <option value="">اختر المنطقة...</option>
+              {GAZA_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+            </select>
           </div>
         </div>
 
@@ -209,7 +175,8 @@ function InviteSuccessModal({ result, onClose }: { result: InviteResult; onClose
         <div>
           <h3 style={{ fontSize: 18, fontWeight: 800, color: "#12384f", margin: "0 0 4px" }}>تم إرسال الدعوة بنجاح!</h3>
           <p style={{ fontSize: 13, color: "#6b8aa0", margin: 0 }}>
-            تمت دعوة <strong>{result.fullName}</strong> على البريد الإلكتروني <strong style={{ direction: "ltr", display: "inline-block" }}>{result.email}</strong>
+            تمت دعوة <strong>{result.fullName}</strong> على البريد الإلكتروني{" "}
+            <strong style={{ direction: "ltr", display: "inline-block" }}>{result.email}</strong>
           </p>
         </div>
         <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "14px 16px" }}>
@@ -219,6 +186,7 @@ function InviteSuccessModal({ result, onClose }: { result: InviteResult; onClose
             {copied ? "✅ تم النسخ!" : "📋 نسخ الرابط"}
           </button>
         </div>
+        <p style={{ fontSize: 12, color: "#8eb5c8", margin: 0 }}>سيقوم السائق بإدخال بيانات شاحنته بنفسه بعد قبول الدعوة.</p>
         <button onClick={onClose} style={{ padding: "11px 0", borderRadius: 10, background: "#f8fcff", color: "#0284c7", border: "1px solid #bae6fd", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>إغلاق</button>
       </div>
     </div>
@@ -282,7 +250,7 @@ export default function ProviderFleet() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 14 }}>
         <div>
           <h2 style={{ fontSize: 24, fontWeight: 800, color: "#12384f", marginBottom: 4 }}>إدارة السائقين</h2>
-          <p style={{ fontSize: 13, color: "#6b8aa0" }}>ادعُ السائقين عبر البريد الإلكتروني — بيانات الشاحنة تُدرج ضمن ملف كل سائق.</p>
+          <p style={{ fontSize: 13, color: "#6b8aa0" }}>أرسل دعوات للسائقين — كل سائق يُدخل بيانات شاحنته بنفسه عند قبول الدعوة.</p>
         </div>
         <button
           onClick={() => setInviteOpen(true)}
@@ -364,6 +332,7 @@ export default function ProviderFleet() {
               driver.status === "active"    ? "linear-gradient(135deg,#0284c7,#0ea5e9)" :
               driver.status === "invited"   ? "linear-gradient(135deg,#d97706,#f59e0b)" :
                                               "linear-gradient(135deg,#dc2626,#f87171)";
+            const hasTruck = !!(driver.plateNumber || driver.vehicleModel);
 
             return (
               <div key={driver.id}
@@ -394,12 +363,20 @@ export default function ProviderFleet() {
                 <div style={{ padding: "12px 18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flex: 1 }}>
                   <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "10px 12px" }}>
                     <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 4 }}>🚛 الشاحنة</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{driver.plateNumber || "—"}</div>
-                    {driver.vehicleModel && <div style={{ fontSize: 11, color: "#6b8aa0", marginTop: 2 }}>{driver.vehicleModel}</div>}
+                    {hasTruck ? (
+                      <>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{driver.plateNumber || "—"}</div>
+                        {driver.vehicleModel && <div style={{ fontSize: 11, color: "#6b8aa0", marginTop: 2 }}>{driver.vehicleModel}</div>}
+                      </>
+                    ) : (
+                      <div style={{ fontSize: 11, color: "#d97706", fontWeight: 600 }}>في انتظار السائق</div>
+                    )}
                   </div>
                   <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "10px 12px" }}>
                     <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 4 }}>💧 السعة</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{fmtCapacity(driver.capacityLiters)}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: hasTruck ? "#12384f" : "#d97706" }}>
+                      {hasTruck ? fmtCapacity(driver.capacityLiters) : "في انتظار السائق"}
+                    </div>
                   </div>
                   <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "10px 12px" }}>
                     <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 4 }}>📍 المنطقة</div>
