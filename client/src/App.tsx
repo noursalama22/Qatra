@@ -2,6 +2,7 @@ import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useRef, useSta
 import AdminPortal from "./pages/AdminPortal";
 import NgoPortal from "./pages/NgoPortal";
 import ProviderPortal from "./pages/ProviderPortal";
+import ProviderContracts from "./pages/ProviderContracts";
 import DriverPortal from "./pages/DriverPortal";
 import Citizen from "./pages/Citizen";
 import MapView from "./pages/MapView";
@@ -67,7 +68,8 @@ const ROLE_NAV: Record<Role, { id: string; label: string }[]> = {
     { id: "map", label: "الخريطة الحية" },
   ],
   provider: [
-    { id: "main", label: "بوابة المزود" },
+    { id: "main", label: "لوحة التحكم" },
+    { id: "contracts", label: "العقود" },
     { id: "map", label: "الخريطة الحية" },
   ],
   driver: [
@@ -351,6 +353,7 @@ export default function App() {
 
   const renderPage = () => {
     if (page === "map") return <MapView />;
+    if (role === "provider" && page === "contracts") return <ProviderContracts />;
     switch (role) {
       case "admin": return <AdminPortal />;
       case "ngo": return <NgoPortal />;
@@ -416,7 +419,7 @@ export default function App() {
             <button
               key={item.id}
               className={`nav-item ${page === item.id ? "active" : ""}`}
-              onClick={() => setPage(item.id as "main" | "map")}
+              onClick={() => setPage(item.id as "main" | "map" | "contracts")}
             >
               {item.label}
             </button>
