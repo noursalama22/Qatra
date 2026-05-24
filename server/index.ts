@@ -1052,8 +1052,12 @@ app.get("/api/provider-drivers", async (req, res) => {
     const normalizedDrivers = realDrivers.map(d => ({
       id: d.id,
       fullName: d.fullName ?? "سائق غير مسمى",
-      phone: d.phone ?? "—",
+      email: null,
+      phone: d.phone ?? null,
       zone: d.zone ?? "غير محدد",
+      plateNumber: d.plateNumber ?? null,
+      vehicleModel: d.vehicleModel ?? null,
+      capacityLiters: d.vehicleCapacityLiters ?? null,
       status: d.status === "active" ? "active" : d.status === "inactive" ? "suspended" : "active",
       lastActivityAt: d.lastActivityAt?.toISOString() ?? null,
       source: "driver",

@@ -193,6 +193,41 @@ function InviteSuccessModal({ result, onClose }: { result: InviteResult; onClose
   );
 }
 
+// ── Dispatch Modal ──────────────────────────────────────────────────────────
+
+function DispatchModal({ driver, onClose }: { driver: DriverEntry; onClose: () => void }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 220, backdropFilter: "blur(3px)", padding: "20px" }} onClick={onClose}>
+      <div style={{ background: "white", borderRadius: 18, width: "100%", maxWidth: 480, overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ background: "linear-gradient(135deg, #0f3d5c, #0284c7)", padding: "22px 26px", color: "white", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 3 }}>تعيين لمهمة</div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>{driver.fullName}</h3>
+            {driver.plateNumber && (
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 3 }}>🚛 {driver.plateNumber}{driver.capacityLiters ? ` · ${fmtCapacity(driver.capacityLiters)}` : ""}</div>
+            )}
+          </div>
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", fontSize: 18, color: "white", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "28px 26px 32px" }}>
+          <div style={{ textAlign: "center", padding: "24px 0" }}>
+            <div style={{ fontSize: 48, marginBottom: 14 }}>🗺️</div>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "#12384f", marginBottom: 8 }}>لا توجد رحلات توزيع مفتوحة حالياً</p>
+            <p style={{ fontSize: 13, color: "#6b8aa0", lineHeight: 1.6, margin: "0 0 20px" }}>
+              سيظهر هنا قائمة رحلات التوزيع والطلبات التجارية المتاحة لتعيين هذا السائق إليها.
+            </p>
+            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 10, background: "#f0f9ff", color: "#0284c7", border: "1px solid #bae6fd", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>إغلاق</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ───────────────────────────────────────────────────────────────
 
 export default function ProviderFleet() {
@@ -202,6 +237,7 @@ export default function ProviderFleet() {
   const [zoneFilter, setZoneFilter] = useState("all");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
+  const [dispatchDriver, setDispatchDriver] = useState<DriverEntry | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadDrivers = () =>
@@ -326,89 +362,137 @@ export default function ProviderFleet() {
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
           {filtered.map((driver, i) => {
-            const st = DRIVER_STATUS[driver.status] ?? DRIVER_STATUS.suspended;
-            const initials = driver.fullName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase() || `S${i + 1}`;
+            // A driver is "incomplete" when accepted but hasn't yet submitted truck data
+            const isIncomplete = driver.status === "active" && !driver.plateNumber;
+            const canDispatch   = driver.status === "active" && !isIncomplete;
+
+            // Badge config — override "active" with amber when profile is incomplete
+            const badge = isIncomplete
+              ? { label: "بانتظار إكمال البيانات", bg: "#fef3c7", color: "#b45309", dot: "#f59e0b" }
+              : (DRIVER_STATUS[driver.status] ?? DRIVER_STATUS.suspended);
+
+            const displayName = (isIncomplete && (driver.fullName === "سائق غير مسمى" || !driver.fullName.trim()))
+              ? "لم يُكمل بياناته بعد"
+              : driver.fullName;
+
+            const initials = displayName === "لم يُكمل بياناته بعد"
+              ? "؟"
+              : displayName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase() || `S${i + 1}`;
+
             const avatarBg =
+              isIncomplete                  ? "linear-gradient(135deg,#d97706,#fbbf24)" :
               driver.status === "active"    ? "linear-gradient(135deg,#0284c7,#0ea5e9)" :
               driver.status === "invited"   ? "linear-gradient(135deg,#d97706,#f59e0b)" :
                                               "linear-gradient(135deg,#dc2626,#f87171)";
+
+            const cardBg     = isIncomplete ? "#fffdf5" : "white";
+            const cardBorder = isIncomplete ? "1px solid #fcd34d" : "1px solid #d8eef8";
+            const leftAccent = isIncomplete ? "4px solid #f59e0b" : "4px solid transparent";
+
             const hasTruck = !!(driver.plateNumber || driver.vehicleModel);
 
             return (
               <div key={driver.id}
-                style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 14, overflow: "hidden", display: "flex", flexDirection: "column", transition: "border-color 0.15s, transform 0.15s" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#7dd3fc"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#d8eef8"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
+                style={{ background: cardBg, border: cardBorder, borderRight: leftAccent, borderRadius: 14, overflow: "hidden", display: "flex", flexDirection: "column", transition: "border-color 0.15s, transform 0.15s" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
               >
                 {/* Card Header */}
-                <div style={{ padding: "18px 18px 14px", borderBottom: "1px solid #f0f9ff" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 46, height: 46, borderRadius: "50%", background: avatarBg, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 16, flexShrink: 0 }}>
+                <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${isIncomplete ? "#fde68a40" : "#f0f9ff"}` }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: "50%", background: avatarBg, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
                         {initials}
                       </div>
-                      <div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: "#12384f" }}>{driver.fullName}</div>
-                        <div style={{ fontSize: 11, color: "#8eb5c8", marginTop: 2, direction: "ltr", textAlign: "right" }}>✉️ {driver.email || "—"}</div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: isIncomplete ? "#92400e" : "#12384f", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {displayName}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#8eb5c8", marginTop: 1, direction: "ltr", textAlign: "right" }}>✉️ {driver.email || "—"}</div>
+                        {/* Truck row */}
+                        <div style={{ marginTop: 4, fontSize: 12, color: hasTruck ? "#0284c7" : "#9ca3af", fontWeight: hasTruck ? 700 : 400 }}>
+                          {hasTruck
+                            ? `🚛 ${driver.plateNumber || "—"}  ·  💧 ${fmtCapacity(driver.capacityLiters)}`
+                            : "لم تُضف بيانات الشاحنة بعد"}
+                        </div>
                       </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 5, background: st.bg, border: `1px solid ${st.dot}30`, borderRadius: 20, padding: "5px 11px", flexShrink: 0 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: st.dot }} />
-                      <span style={{ fontSize: 11, fontWeight: 700, color: st.color }}>{st.label}</span>
+                    {/* Status badge */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, background: badge.bg, border: `1px solid ${badge.dot}40`, borderRadius: 20, padding: "4px 9px", flexShrink: 0, whiteSpace: "nowrap" }}>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: badge.dot, flexShrink: 0 }} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: badge.color }}>{badge.label}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Card Body */}
-                <div style={{ padding: "12px 18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flex: 1 }}>
-                  <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "10px 12px" }}>
-                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 4 }}>🚛 الشاحنة</div>
-                    {hasTruck ? (
-                      <>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{driver.plateNumber || "—"}</div>
-                        {driver.vehicleModel && <div style={{ fontSize: 11, color: "#6b8aa0", marginTop: 2 }}>{driver.vehicleModel}</div>}
-                      </>
-                    ) : (
-                      <div style={{ fontSize: 11, color: "#d97706", fontWeight: 600 }}>في انتظار السائق</div>
-                    )}
-                  </div>
-                  <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "10px 12px" }}>
-                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 4 }}>💧 السعة</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: hasTruck ? "#12384f" : "#d97706" }}>
-                      {hasTruck ? fmtCapacity(driver.capacityLiters) : "في انتظار السائق"}
+                <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, flex: 1 }}>
+                  <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "9px 11px" }}>
+                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 3 }}>🚛 الموديل</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: hasTruck ? "#12384f" : "#9ca3af" }}>
+                      {driver.vehicleModel || "—"}
                     </div>
                   </div>
-                  <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "10px 12px" }}>
-                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 4 }}>📍 المنطقة</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{driver.zone || "—"}</div>
+                  <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "9px 11px" }}>
+                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 3 }}>📍 المنطقة</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#12384f" }}>{driver.zone || "—"}</div>
                   </div>
-                  <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "10px 12px" }}>
-                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 4 }}>🕐 آخر نشاط</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#12384f" }}>{fmtDate(driver.lastActivityAt)}</div>
+                  <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "9px 11px" }}>
+                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 3 }}>📱 الهاتف</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#12384f" }}>{driver.phone || "—"}</div>
+                  </div>
+                  <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "9px 11px" }}>
+                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 3 }}>🕐 آخر نشاط</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#12384f" }}>{fmtDate(driver.lastActivityAt)}</div>
                   </div>
                 </div>
 
                 {/* Card Actions */}
-                <div style={{ padding: "12px 18px 16px", display: "flex", gap: 8 }}>
+                <div style={{ padding: "10px 16px 14px", display: "flex", gap: 7, flexWrap: "wrap" }}>
+
+                  {/* Dispatch button — shown for active drivers; disabled when incomplete */}
+                  {(driver.status === "active") && (
+                    <button
+                      onClick={() => canDispatch && setDispatchDriver(driver)}
+                      disabled={!canDispatch}
+                      title={!canDispatch ? "يجب على السائق إكمال بيانات شاحنته أولاً" : undefined}
+                      style={{
+                        flex: 2, padding: "9px 0", borderRadius: 8, fontSize: 12, fontWeight: 700,
+                        cursor: canDispatch ? "pointer" : "not-allowed",
+                        background: canDispatch ? "linear-gradient(135deg,#0284c7,#0ea5e9)" : "#e5e7eb",
+                        color: canDispatch ? "white" : "#9ca3af",
+                        border: "none",
+                        opacity: canDispatch ? 1 : 0.8,
+                      }}
+                    >
+                      🗺️ تعيين لمهمة
+                    </button>
+                  )}
+
+                  {/* Invited: resend + activate */}
                   {driver.status === "invited" && <>
                     <button onClick={() => handleDriverAction(driver, "resend")}
-                      style={{ flex: 1, padding: "8px 0", background: "#fef3c7", color: "#d97706", border: "1px solid #fcd34d", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                      إعادة إرسال الرابط
+                      style={{ flex: 1, padding: "9px 0", background: "#fef3c7", color: "#d97706", border: "1px solid #fcd34d", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      إعادة إرسال
                     </button>
                     <button onClick={() => handleDriverAction(driver, "activate")}
-                      style={{ flex: 1, padding: "8px 0", background: "#ecfeff", color: "#0891b2", border: "1px solid #67e8f9", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      style={{ flex: 1, padding: "9px 0", background: "#ecfeff", color: "#0891b2", border: "1px solid #67e8f9", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                       تفعيل
                     </button>
                   </>}
+
+                  {/* Active: suspend */}
                   {driver.status === "active" && (
                     <button onClick={() => handleDriverAction(driver, "suspend")}
-                      style={{ flex: 1, padding: "8px 0", background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                      إيقاف مؤقت
+                      style={{ flex: 1, padding: "9px 0", background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      إيقاف
                     </button>
                   )}
+
+                  {/* Suspended: reactivate */}
                   {driver.status === "suspended" && (
                     <button onClick={() => handleDriverAction(driver, "activate")}
-                      style={{ flex: 1, padding: "8px 0", background: "#ecfeff", color: "#0891b2", border: "1px solid #67e8f9", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      style={{ flex: 1, padding: "9px 0", background: "#ecfeff", color: "#0891b2", border: "1px solid #67e8f9", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                       إعادة تفعيل
                     </button>
                   )}
@@ -427,6 +511,9 @@ export default function ProviderFleet() {
       )}
       {inviteResult && (
         <InviteSuccessModal result={inviteResult} onClose={() => setInviteResult(null)} />
+      )}
+      {dispatchDriver && (
+        <DispatchModal driver={dispatchDriver} onClose={() => setDispatchDriver(null)} />
       )}
     </div>
   );
