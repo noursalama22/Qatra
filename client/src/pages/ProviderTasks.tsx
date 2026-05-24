@@ -183,6 +183,14 @@ const ACTIVE_DRIVERS: DriverOption[] = [
   { id: "d5", name: "خالد الغول",    plate: "GZ-6640", capacityLiters: 2000,  region: "رفح",       vehicleType: "خزان مياه",    status: "active" },
 ];
 
+const REGION_COORDS: Record<string, { lat: number; lng: number; eta: string; km: string }> = {
+  "شمال غزة": { lat: 31.547, lng: 34.471, eta: "١٢ دقيقة", km: "٦.٢ كم" },
+  "مدينة غزة": { lat: 31.500, lng: 34.465, eta: "١٨ دقيقة", km: "٩.٤ كم" },
+  "الوسطى":    { lat: 31.399, lng: 34.428, eta: "٢٥ دقيقة", km: "١٤.٨ كم" },
+  "خان يونس":  { lat: 31.345, lng: 34.305, eta: "٣١ دقيقة", km: "٢٢.١ كم" },
+  "رفح":       { lat: 31.296, lng: 34.259, eta: "٤٢ دقيقة", km: "٣١.٥ كم" },
+};
+
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("ar-AE", { day: "2-digit", month: "long", year: "numeric" });
 }
@@ -559,6 +567,131 @@ function Timeline({ items }: { items: { label: string; date: string; note?: stri
   );
 }
 
+type TrackTarget = {
+  label: string;
+  region: string;
+  quantity: number;
+  driver: { name: string; plate: string; region: string };
+  timeline: { label: string; date: string; note?: string }[];
+};
+
+function TrackingModal({ target, onClose }: { target: TrackTarget; onClose: () => void }) {
+  const coords = REGION_COORDS[target.region] ?? { lat: 31.5, lng: 34.47, eta: "—", km: "—" };
+  const delta = 0.025;
+  const bbox = `${coords.lng - delta},${coords.lat - delta},${coords.lng + delta},${coords.lat + delta}`;
+  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${coords.lat},${coords.lng}`;
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "stretch", justifyContent: "center", zIndex: 300, backdropFilter: "blur(2px)" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "#fff", width: "100%", maxWidth: 900, display: "flex", flexDirection: "column", margin: "24px auto", borderRadius: 16, overflow: "hidden" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ background: "linear-gradient(135deg, #0f3d5c 0%, #065073 100%)", padding: "16px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#34d399", boxShadow: "0 0 0 3px rgba(52,211,153,0.35)", animation: "pulse 1.5s infinite" }} />
+            <div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>تتبع مباشر — في الطريق</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#fff" }}>{target.label} · {target.region}</div>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: "50%", width: 32, height: 32, color: "#fff", cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}
+          >×</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+          {/* Left sidebar */}
+          <div style={{ width: 280, flexShrink: 0, borderLeft: "1px solid #e8f5fd", overflowY: "auto", padding: "18px 18px", display: "flex", flexDirection: "column", gap: 18 }}>
+
+            {/* ETA cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "12px 12px", textAlign: "center" }}>
+                <div style={{ fontSize: 10, color: "#166534", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" }}>الوصول المتوقع</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#15803d" }}>{coords.eta}</div>
+              </div>
+              <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "12px 12px", textAlign: "center" }}>
+                <div style={{ fontSize: 10, color: "#1d4ed8", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" }}>المسافة</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#1d4ed8" }}>{coords.km}</div>
+              </div>
+            </div>
+
+            {/* Driver card */}
+            <div style={{ background: "#f8fcff", border: "1px solid #d8eef8", borderRadius: 12, padding: "14px 14px" }}>
+              <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>السائق</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#0284c7", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
+                  {target.driver.name.charAt(0)}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: "#0f3d5c" }}>{target.driver.name}</div>
+                  <div style={{ fontSize: 12, color: "#6b8aa0", marginTop: 2 }}>{target.driver.plate}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {[
+                  { label: "منطقة التغطية", value: target.driver.region },
+                  { label: "الكمية", value: fmtVol(target.quantity) },
+                ].map(row => (
+                  <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: "1px solid #e8f5fd" }}>
+                    <span style={{ fontSize: 11, color: "#6b8aa0" }}>{row.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#12384f" }}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Timeline */}
+            <div>
+              <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>سجل الرحلة</div>
+              <div style={{ position: "relative", paddingRight: 18 }}>
+                <div style={{ position: "absolute", right: 5, top: 5, bottom: 5, width: 2, background: "#d8eef8", borderRadius: 2 }} />
+                {target.timeline.map((item, i) => (
+                  <div key={i} style={{ display: "flex", gap: 10, marginBottom: i < target.timeline.length - 1 ? 14 : 0, position: "relative" }}>
+                    <div style={{ position: "absolute", right: -18, top: 4, width: 10, height: 10, borderRadius: "50%", background: i === target.timeline.length - 1 ? "#0284c7" : "#d8eef8", border: "2px solid #0284c7", flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#12384f" }}>{item.label}</div>
+                      <div style={{ fontSize: 11, color: "#6b8aa0", marginTop: 1 }}>{item.date}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Map */}
+          <div style={{ flex: 1, position: "relative", minHeight: 420, background: "#e8f4f8" }}>
+            <iframe
+              title="خريطة التتبع"
+              src={mapUrl}
+              style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+              sandbox="allow-scripts allow-same-origin"
+            />
+            {/* Live overlay badge */}
+            <div style={{ position: "absolute", top: 12, right: 12, background: "rgba(15,61,92,0.9)", color: "#fff", borderRadius: 20, padding: "6px 14px", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 7, backdropFilter: "blur(4px)" }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#34d399" }} />
+              بث مباشر
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { box-shadow: 0 0 0 3px rgba(52,211,153,0.35); }
+          50% { box-shadow: 0 0 0 7px rgba(52,211,153,0.1); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 type AssignTarget = { taskId: string; taskLabel: string; region: string; quantity: number; type: "ngo" | "citizen"; isReassign?: boolean; currentDriverName?: string };
 
 function AssignDriverModal({
@@ -851,6 +984,7 @@ export default function ProviderTasks() {
   const [selectedCitTask, setSelectedCitTask] = useState<CitizenTask | null>(null);
   const [citTasks, setCitTasks] = useState<CitizenTask[]>(CITIZEN_TASKS_MOCK);
   const [assignTarget, setAssignTarget] = useState<AssignTarget | null>(null);
+  const [trackTarget, setTrackTarget] = useState<TrackTarget | null>(null);
 
   const filteredNgo = ngoTasks.filter(t => {
     if (ngoStatus !== "all" && t.status !== ngoStatus) return false;
@@ -1028,6 +1162,8 @@ export default function ProviderTasks() {
                                 setAssignTarget({ taskId: task.id, taskLabel: task.tripNumber, region: task.region, quantity: task.quantityLiters, type: "ngo" });
                               } else if (action === "reassign") {
                                 setAssignTarget({ taskId: task.id, taskLabel: task.tripNumber, region: task.region, quantity: task.quantityLiters, type: "ngo", isReassign: true, currentDriverName: task.driver?.name });
+                              } else if (action === "track" && task.driver) {
+                                setTrackTarget({ label: task.tripNumber, region: task.region, quantity: task.quantityLiters, driver: task.driver, timeline: task.timeline });
                               } else if (action === "approve") {
                                 handleNgoApprove(task.id);
                               } else {
@@ -1119,6 +1255,8 @@ export default function ProviderTasks() {
                                 setAssignTarget({ taskId: task.id, taskLabel: task.orderNumber, region: task.region, quantity: task.quantityLiters, type: "citizen" });
                               } else if (action === "reassign") {
                                 setAssignTarget({ taskId: task.id, taskLabel: task.orderNumber, region: task.region, quantity: task.quantityLiters, type: "citizen", isReassign: true, currentDriverName: task.driver?.name });
+                              } else if (action === "track" && task.driver) {
+                                setTrackTarget({ label: task.orderNumber, region: task.region, quantity: task.quantityLiters, driver: task.driver, timeline: task.timeline });
                               } else if (action === "approve") {
                                 handleCitApprove(task.id);
                               } else {
@@ -1158,6 +1296,13 @@ export default function ProviderTasks() {
           target={assignTarget}
           onClose={() => setAssignTarget(null)}
           onConfirm={handleAssignConfirm}
+        />
+      )}
+
+      {trackTarget && (
+        <TrackingModal
+          target={trackTarget}
+          onClose={() => setTrackTarget(null)}
         />
       )}
     </div>
