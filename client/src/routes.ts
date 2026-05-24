@@ -1,9 +1,9 @@
 export type Role = "admin" | "ngo" | "provider" | "driver" | "citizen";
 
-export type NgoSection = "dashboard" | "pipeline" | "verify" | "contracts" | "reports";
+export type NgoSection = "dashboard" | "tasks" | "pipeline" | "verify" | "contracts" | "reports";
 
 export const NGO_SECTIONS: NgoSection[] = [
-  "dashboard", "pipeline", "verify", "contracts", "reports",
+  "dashboard", "tasks", "pipeline", "verify", "contracts", "reports",
 ];
 
 export function isNgoSection(value: string | undefined): value is NgoSection {
@@ -60,6 +60,7 @@ export const NGO_NAV_GROUPS: NgoNavGroup[] = [
     defaultOpen: true,
     items: [
       { path: "/ngo/dashboard", section: "dashboard", label: "جدولة التوزيع" },
+      { path: "/ngo/tasks", section: "tasks", label: "جميع المهام" },
       { path: "/ngo/pipeline", section: "pipeline", label: "المسار النشط", badgeKey: "active" },
       { path: "/ngo/verify", section: "verify", label: "التوثيق", badgeKey: "delivered" },
     ],
