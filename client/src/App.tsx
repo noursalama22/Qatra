@@ -3,6 +3,7 @@ import AdminPortal from "./pages/AdminPortal";
 import NgoPortal from "./pages/NgoPortal";
 import ProviderPortal from "./pages/ProviderPortal";
 import ProviderContracts from "./pages/ProviderContracts";
+import ProviderFleet from "./pages/ProviderFleet";
 import DriverPortal from "./pages/DriverPortal";
 import Citizen from "./pages/Citizen";
 import MapView from "./pages/MapView";
@@ -70,6 +71,7 @@ const ROLE_NAV: Record<Role, { id: string; label: string }[]> = {
   provider: [
     { id: "main", label: "لوحة التحكم" },
     { id: "contracts", label: "العقود" },
+    { id: "fleet", label: "الأسطول" },
     { id: "map", label: "الخريطة الحية" },
   ],
   driver: [
@@ -354,6 +356,7 @@ export default function App() {
   const renderPage = () => {
     if (page === "map") return <MapView />;
     if (role === "provider" && page === "contracts") return <ProviderContracts />;
+    if (role === "provider" && page === "fleet") return <ProviderFleet />;
     switch (role) {
       case "admin": return <AdminPortal />;
       case "ngo": return <NgoPortal />;
@@ -419,7 +422,7 @@ export default function App() {
             <button
               key={item.id}
               className={`nav-item ${page === item.id ? "active" : ""}`}
-              onClick={() => setPage(item.id as "main" | "map" | "contracts")}
+              onClick={() => setPage(item.id as "main" | "map" | "contracts" | "fleet")}
             >
               {item.label}
             </button>

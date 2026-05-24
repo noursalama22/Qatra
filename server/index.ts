@@ -8,7 +8,7 @@ import {
   ngosTable, providersTable, driversTable, zonesTable,
   distributionTasksTable, deliveryOrdersTable, usersTable,
   citizensTable, signalsTable, gpsPositionsTable,
-  userRolesTable, contractsTable,
+  userRolesTable, contractsTable, trucksTable,
 } from "@shared/schema";
 import { eq, count, sum, sql, desc, and } from "drizzle-orm";
 
@@ -701,6 +701,52 @@ app.get("/api/citizen/:citizenId/orders", async (req, res) => {
       .where(eq(deliveryOrdersTable.citizenId, req.params.citizenId))
       .orderBy(deliveryOrdersTable.createdAt);
     res.json({ data });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// ── Trucks ─────────────────────────────────────────────────────────────────
+
+app.get("/api/trucks", async (req, res) => {
+  try {
+    const providerId = req.query.providerId as string | undefined;
+    if (providerId) {
+      const data = await db.select().from(trucksTable)
+        .where(eq(trucksTable.providerId, providerId))
+        .orderBy(trucksTable.createdAt);
+      return res.json({ data, total: data.length });
+    }
+    const data = await db.select().from(trucksTable).orderBy(trucksTable.createdAt);
+    res.json({ data, total: data.length });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post("/api/trucks", async (req, res) => {
+  try {
+    const { providerId, plateNumber, model, capacityLiters, year, notes } = req.body;
+    if (!providerId || !plateNumber || !model || !capacityLiters || !year) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+    const [truck] = await db.insert(trucksTable).values({
+      providerId, plateNumber, model,
+      capacityLiters: Number(capacityLiters),
+      year: Number(year),
+      notes: notes ?? null,
+    }).returning();
+    res.status(201).json(truck);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.patch("/api/trucks/:id", async (req, res) => {
+  try {
+    const allowed = ["available", "on_trip", "maintenance"] as const;
+    const status = req.body.status;
+    if (status && !allowed.includes(status)) return res.status(400).json({ error: "Invalid status" });
+    const [updated] = await db.update(trucksTable)
+      .set({ ...(status ? { status } : {}), updatedAt: new Date() })
+      .where(eq(trucksTable.id, req.params.id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 

@@ -378,6 +378,29 @@ export const paymentsTable = pgTable(
   (t) => [index("idx_payments_user_id").on(t.userId), index("idx_payments_status").on(t.status)],
 );
 
+// ── Trucks ────────────────────────────────────────────────────────────────────
+
+export const truckStatusEnum = pgEnum("truck_status", ["available", "on_trip", "maintenance"]);
+
+export const trucksTable = pgTable(
+  "trucks",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    providerId: varchar("provider_id").notNull().references(() => providersTable.id, { onDelete: "cascade" }),
+    plateNumber: varchar("plate_number", { length: 30 }).notNull(),
+    model: varchar("model", { length: 100 }).notNull(),
+    capacityLiters: integer("capacity_liters").notNull(),
+    year: integer("year").notNull(),
+    status: truckStatusEnum("status").notNull().default("available"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  },
+  (t) => [index("idx_trucks_provider_id").on(t.providerId), index("idx_trucks_status").on(t.status)],
+);
+
+export type Truck = typeof trucksTable.$inferSelect;
+
 // ── Contracts ─────────────────────────────────────────────────────────────────
 
 export const contractStatusEnum = pgEnum("contract_status", ["review", "active", "rejected"]);
