@@ -39,6 +39,14 @@ function fmtDate(d: string | null) {
 // ── Invite Driver Modal ─────────────────────────────────────────────────────
 
 function InviteDriverModal({ onClose, onSent }: { onClose: () => void; onSent: (result: InviteResult) => void }) {
+  const GAZA_ZONES = [
+    "شمال غزة", "بيت لاهيا", "بيت حانون", "جباليا",
+    "مدينة غزة", "الشجاعية", "الزيتون", "التفاح", "الرمال", "الشيخ رضوان",
+    "دير البلح", "النصيرات", "البريج", "المغازي",
+    "خان يونس", "عبسان", "خزاعة", "بني سهيلا",
+    "رفح", "تل السلطان", "البرازيل",
+  ];
+
   const [form, setForm] = useState({ fullName: "", phone: "", zone: "", idNumber: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +89,6 @@ function InviteDriverModal({ onClose, onSent }: { onClose: () => void; onSent: (
           {[
             { label: "الاسم الكامل *", key: "fullName", placeholder: "مثال: محمد أحمد", full: true },
             { label: "رقم الهاتف *",   key: "phone",    placeholder: "مثال: +970-599-000-000" },
-            { label: "المنطقة",         key: "zone",     placeholder: "مثال: خان يونس" },
             { label: "رقم الهوية (اختياري)", key: "idNumber", placeholder: "رقم الهوية الوطنية" },
           ].map(f => (
             <div key={f.key} style={f.full ? { gridColumn: "1 / -1" } : {}}>
@@ -94,6 +101,18 @@ function InviteDriverModal({ onClose, onSent }: { onClose: () => void; onSent: (
               />
             </div>
           ))}
+
+          <div>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#6b8aa0", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.4 }}>المنطقة</label>
+            <select
+              value={form.zone}
+              onChange={e => setForm(p => ({ ...p, zone: e.target.value }))}
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid #d8eef8", borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none", direction: "rtl", background: "#fafcff", color: form.zone ? "#12384f" : "#8eb5c8" }}
+            >
+              <option value="">اختر المنطقة...</option>
+              {GAZA_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+            </select>
+          </div>
         </div>
 
         {error && <div style={{ background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 8, padding: "9px 12px", fontSize: 12, fontWeight: 700 }}>{error}</div>}
