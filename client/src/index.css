@@ -1,13 +1,32 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: 'Tajawal', sans-serif; background: #f3fbff; color: #12384f; min-height: 100vh; direction: rtl; text-align: right;
-} :root { --blue: #0ea5e9; --blue-light: #e0f7ff; --blue-dark: #0284c7; --green: #0891b2; --green-light: #ecfeff; --yellow: #d97706; --yellow-light: #fffbeb; --red: #dc2626; --red-light: #fef2f2; --gray: #6b8aa0; --gray-light: #f8fcff; --border: #d8eef8; --white: #ffffff; --shadow: none; --shadow-md: none;
+} :root {
+  --navy-deep: #0f1d33;
+  --navy: #1a3352;
+  --water: #38bdf8;
+  --water-light: #bae6fd;
+  --blue: #0ea5e9;
+  --blue-light: #e0f7ff;
+  --blue-dark: #0284c7;
+  --green: #0891b2;
+  --green-light: #ecfeff;
+  --yellow: #d97706;
+  --yellow-light: #fffbeb;
+  --red: #dc2626;
+  --red-light: #fef2f2;
+  --gray: #6b8aa0;
+  --gray-light: #f8fcff;
+  --border: #d8eef8;
+  --white: #ffffff;
+  --shadow: none;
+  --shadow-md: none;
 } /* Layout */
 .layout { display: flex; min-height: 100vh; } /* Sidebar */
 .sidebar { width: 240px; background: #f8fcff; color: #12384f; display: flex; flex-direction: column; flex-shrink: 0; position: fixed; top: 0; right: 0; bottom: 0; border-left: 1px solid var(--border);
 }
 .sidebar-logo { padding: 20px 20px 16px; border-bottom: 1px solid var(--border);
 }
-.sidebar-logo h1 { font-size: 18px; font-weight: 700; color: #0f5f8d; letter-spacing: -0.3px; }
-.sidebar-logo span { font-size: 11px; color: #6b8aa0; text-transform: uppercase; letter-spacing: 0.5px; } .sidebar-nav { padding: 12px 8px; flex: 1; }
+.sidebar-logo .logo-wordmark { font-size: 17px; }
+.sidebar-logo-tagline { display: block; font-size: 11px; color: #6b8aa0; margin-top: 6px; letter-spacing: 0.3px; } .sidebar-nav { padding: 12px 8px; flex: 1; }
 .nav-section-label { font-size: 10px; font-weight: 600; color: #6b8aa0; text-transform: uppercase; letter-spacing: 0.8px; padding: 8px 12px 4px;
 }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: #5f8299; transition: all 0.15s; margin-bottom: 2px; background: none; border: none; width: 100%; text-align: right; text-decoration: none;
@@ -591,9 +610,9 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
 /* Auth */
 .auth-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 28px; background: linear-gradient(135deg, #f3fbff 0%, #e0f7ff 100%); }
 .auth-panel { width: min(720px, 100%); background: white; border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
-.auth-brand { text-align: center; margin-bottom: 18px; }
-.auth-brand h1 { color: #0f5f8d; font-size: 26px; font-weight: 800; margin-bottom: 4px; }
+.auth-brand { display: flex; flex-direction: column; align-items: center; margin-bottom: 18px; }
 .auth-brand p { color: #6b8aa0; font-size: 13px; }
+.auth-brand .logo-wordmark { font-size: 24px; }
 .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: #f8fcff; border: 1px solid var(--border); border-radius: 10px; padding: 4px; margin-bottom: 18px; }
 .auth-tabs button { border: 0; background: transparent; border-radius: 8px; padding: 10px 12px; font-family: inherit; font-size: 14px; font-weight: 700; color: #6b8aa0; cursor: pointer; }
 .auth-tabs .auth-tab-active { background: #0ea5e9; color: white; }

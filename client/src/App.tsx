@@ -1,15 +1,20 @@
 import { Dispatch, FormEvent, SetStateAction, useEffect, useState } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import AdminPortal from "./pages/AdminPortal";
 import NgoPortal from "./pages/NgoPortal";
 import ProviderPortal from "./pages/ProviderPortal";
 import DriverPortal from "./pages/DriverPortal";
 import Citizen from "./pages/Citizen";
 import MapView from "./pages/MapView";
+import LandingPage from "./pages/LandingPage";
+import CitizenLoginComingSoon from "./pages/CitizenLoginComingSoon";
 import AppLayout from "./layouts/AppLayout";
 import RequireRole, { AuthUser } from "./components/RequireRole";
+import Logo from "./components/Logo";
 import { api, Provider, Zone } from "./api";
 import { DEFAULT_NGO_PATH, ROLE_HOME, Role } from "./routes";
+
+export type AuthIntent = "provider" | "default";
 
 type AuthMode = "login" | "register";
 
@@ -67,9 +72,18 @@ const emptyAuthForm = (): AuthForm => ({
   lng: "",
 });
 
-function AuthScreen({ onAuth }: { onAuth: (user: AuthUser) => void }) {
+function AuthScreen({
+  onAuth,
+  intent = "default",
+}: {
+  onAuth: (user: AuthUser) => void;
+  intent?: AuthIntent;
+}) {
   const [mode, setMode] = useState<AuthMode>("login");
-  const [form, setForm] = useState<AuthForm>(emptyAuthForm);
+  const [form, setForm] = useState<AuthForm>(() => ({
+    ...emptyAuthForm(),
+    role: intent === "provider" ? "provider" : "ngo",
+  }));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -100,10 +114,16 @@ function AuthScreen({ onAuth }: { onAuth: (user: AuthUser) => void }) {
   return (
     <main className="auth-page" dir="rtl">
       <section className="auth-panel">
+        <Link to="/" className="auth-back">
+          ← العودة للرئيسية
+        </Link>
         <div className="auth-brand">
-          <h1>Qatra v3</h1>
-          <p>منصة توزيع المياه</p>
+          <Logo />
+          <p style={{ marginTop: 8 }}>منصة توزيع المياه</p>
         </div>
+        {intent === "provider" && (
+          <div className="auth-intent-label">دخول مزود الخدمة — لوحة العمليات</div>
+        )}
 
         <div className="auth-tabs">
           <button className={mode === "login" ? "auth-tab-active" : ""} onClick={() => setMode("login")}>تسجيل الدخول</button>
@@ -302,12 +322,23 @@ export default function App() {
 
   if (!user) {
     return (
-      <AuthScreen
-        onAuth={nextUser => {
-          setUser(nextUser);
-          navigate(ROLE_HOME[nextUser.role], { replace: true });
-        }}
-      />
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route
+          path="/login/provider"
+          element={
+            <AuthScreen
+              intent="provider"
+              onAuth={nextUser => {
+                setUser(nextUser);
+                navigate(ROLE_HOME[nextUser.role], { replace: true });
+              }}
+            />
+          }
+        />
+        <Route path="/login/citizen" element={<CitizenLoginComingSoon />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     );
   }
 

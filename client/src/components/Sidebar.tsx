@@ -3,6 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { getRoleMeta, ROLE_DESCRIPTIONS, roleStatusLabel } from "../constants/roles";
 import { AuthUser } from "./RequireRole";
 import { NGO_NAV_GROUPS, NGO_STANDALONE_NAV, ROLE_NAV } from "../routes";
+import Logo from "./Logo";
 
 function navClass(isActive: boolean, extra = "") {
   return `${extra} nav-item${isActive ? " active" : ""}`.trim();
@@ -48,8 +49,8 @@ export default function Sidebar({ user }: Props) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <h1>Qatra v3</h1>
-        <span>منصة توزيع المياه</span>
+        <Logo />
+        <span className="sidebar-logo-tagline">منصة توزيع المياه</span>
       </div>
 
       <div className="current-role-info role-info-fixed" style={{ borderColor: currentRole.color + "22" }}>
