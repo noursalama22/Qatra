@@ -103,7 +103,7 @@ export default function NotificationBell({ onNavigate }: { onNavigate: (page: st
       {open && (
         <div
           dir="rtl"
-          style={{ position: "absolute", top: 48, left: "50%", transform: "translateX(-50%)", width: 360, background: "white", border: "1px solid #d8eef8", borderRadius: 14, boxShadow: "0 8px 32px rgba(0,60,100,0.14)", zIndex: 300, overflow: "hidden" }}
+          style={{ position: "absolute", top: 48, right: 0, width: 360, background: "white", border: "1px solid #d8eef8", borderRadius: 14, boxShadow: "0 8px 32px rgba(0,60,100,0.14)", zIndex: 300, overflow: "hidden" }}
         >
           {/* Header */}
           <div style={{ padding: "14px 16px", borderBottom: "1px solid #f0f9ff", display: "flex", alignItems: "center", justifyContent: "space-between" }}>

@@ -445,9 +445,10 @@ export default function App() {
             <span>{ROLE_DESCRIPTIONS[role]}</span>
           </div>
 
-          {role === "provider" && (
-            <NotificationBell onNavigate={p => setPage(p as any)} />
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {role === "provider" && (
+              <NotificationBell onNavigate={p => setPage(p as any)} />
+            )}
 
           <div className="user-menu" ref={menuRef}>
             <button className="user-menu-trigger" onClick={() => setMenuOpen(open => !open)} aria-haspopup="menu" aria-expanded={menuOpen}>
@@ -465,6 +466,7 @@ export default function App() {
                 <button onClick={logout} role="menuitem">تسجيل الخروج</button>
               </div>
             )}
+          </div>
           </div>
         </header>
 
