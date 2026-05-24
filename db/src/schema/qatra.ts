@@ -523,6 +523,9 @@ export const deliveryOrdersTable = pgTable(
     status: orderStatusEnum("status").notNull().default("pending"),
     quantityLiters: numeric("quantity_liters", { precision: 10, scale: 2 }),
     totalAmount: numeric("total_amount", { precision: 10, scale: 2 }),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    paymentMethod: varchar("payment_method", { length: 32 }),
+    deliveryNote: text("delivery_note"),
     taskId: varchar("task_id").references(() => driverTasksTable.id, {
       onDelete: "set null",
     }),

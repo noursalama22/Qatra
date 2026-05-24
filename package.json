@@ -5,8 +5,9 @@
   "scripts": {
     "dev:server": "node_modules/.bin/tsx --tsconfig tsconfig.json server/index.ts",
     "dev:client": "cd client && node_modules/.bin/vite",
-    "dev": "node_modules/.bin/concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev": "node_modules/.bin/concurrently -k \"npm run dev:server\" \"npm run dev:client\"",
     "db:push": "node_modules/.bin/drizzle-kit push --config drizzle.config.ts",
+    "db:migrate": "node_modules/.bin/tsx --tsconfig tsconfig.json server/migrate-cli.ts",
     "db:seed": "node_modules/.bin/tsx --tsconfig tsconfig.json server/seed.ts"
   },
   "keywords": [],

@@ -134,10 +134,10 @@ export default function LandingRolesSection() {
                 <span className="landing-section-tag">مساعدات مدعومة</span>
                 <h3 style={{ margin: "12px 0" }}>أرسل إشارة عندما تحتاج مياهاً.</h3>
                 <p style={{ fontSize: 14, color: "var(--landing-muted)", lineHeight: 1.7 }}>
-                  يطابق النظام طلبك مع أقرب عقد إنساني نشط — التطبيق قيد الإطلاق قريباً.
+                  أنشئ حساباً بسيطاً برقم هاتفك — المزيد من خطوات الإعداد قادمة قريباً.
                 </p>
-                <Link to="/login/citizen" className="landing-btn landing-btn-primary landing-btn-lg" style={{ marginTop: 16 }}>
-                  تعرّف على تجربة المواطن
+                <Link to="/login/citizen?mode=register" className="landing-btn landing-btn-primary landing-btn-lg" style={{ marginTop: 16 }}>
+                  إنشاء حساب مواطن
                 </Link>
               </div>
               <div className="landing-mini-card">

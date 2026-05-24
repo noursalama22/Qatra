@@ -4,8 +4,13 @@ async function readResponse<T>(res: Response): Promise<T> {
   const contentType = res.headers.get("content-type") ?? "";
   const body = contentType.includes("application/json") ? await res.json() : await res.text();
   if (!res.ok) {
-    const message = typeof body === "object" && body && "error" in body ? String(body.error) : `${res.status}: ${res.statusText}`;
-    throw new Error(message);
+    if (typeof body === "object" && body && "error" in body) {
+      throw new Error(String(body.error));
+    }
+    if (res.status === 404) {
+      throw new Error("الخدمة غير متوفرة — تأكد من تشغيل الخادم (npm run dev) وإعادة تشغيله بعد التحديثات");
+    }
+    throw new Error(`${res.status}: ${res.statusText}`);
   }
   return body as T;
 }
@@ -41,7 +46,18 @@ export type Zone = { id: string; name: string; status: string; ngoId: string; po
 export type Ngo = { id: string; orgName: string; contactEmail: string; country: string; status: string; description: string };
 export type Provider = { id: string; companyName: string; contactEmail: string; status: string; operatingModes: string[]; description: string };
 export type Driver = { id: string; driverType: string; providerId: string | null; status: string; phone: string; vehicleType: string };
-export type Task = { id: string; ngoId: string; zoneId: string; status: string; quantityLiters: string; scheduledAt: string; notes: string | null };
+export type Task = {
+  id: string;
+  ngoId: string;
+  zoneId: string;
+  status: string;
+  quantityLiters: string;
+  scheduledAt: string;
+  notes: string | null;
+  assignedProviderIds?: string[];
+  ngoName?: string | null;
+  providerNames?: string[];
+};
 export type Region = { id: string; name: string; description: string | null; sortOrder: number };
 export type RegionProvider = {
   id: string; companyName: string; operatingModes: string[]; status: string;
@@ -66,7 +82,25 @@ export type NgoReport = {
   distributionByRegion: Array<{ regionId: string; regionName: string; liters: number }>;
   supplierPerformance: Array<{ providerId: string; providerName: string; adherence: number; totalLiters: number }>;
 };
-export type Order = { id: string; citizenId: string; providerId: string; status: string; quantityLiters: string; totalAmount: string; createdAt: string };
+export type Order = {
+  id: string;
+  citizenId: string;
+  providerId: string;
+  status: string;
+  quantityLiters: string;
+  totalAmount: string;
+  scheduledAt: string | null;
+  paymentMethod: string | null;
+  deliveryNote: string | null;
+  createdAt: string;
+};
+export type CitizenProfile = {
+  id: string;
+  userId: string;
+  zoneId: string;
+  zoneName: string | null;
+  createdAt: string;
+};
 export type Stats = {
   totalZones: number; activeZones: number;
   totalNgos: number; approvedNgos: number;

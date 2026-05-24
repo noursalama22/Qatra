@@ -45,6 +45,7 @@ export const sessionsTable = pgTable(
 export const usersTable = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").unique(),
+  phone: varchar("phone", { length: 50 }).unique(),
   passwordHash: varchar("password_hash", { length: 255 }),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
@@ -367,6 +368,9 @@ export const deliveryOrdersTable = pgTable(
     status: orderStatusEnum("status").notNull().default("pending"),
     quantityLiters: numeric("quantity_liters", { precision: 10, scale: 2 }),
     totalAmount: numeric("total_amount", { precision: 10, scale: 2 }),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    paymentMethod: varchar("payment_method", { length: 32 }),
+    deliveryNote: text("delivery_note"),
     taskId: varchar("task_id").references(() => driverTasksTable.id, { onDelete: "set null" }),
     mockPaymentToken: varchar("mock_payment_token", { length: 255 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

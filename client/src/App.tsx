@@ -1,13 +1,19 @@
-import { Dispatch, FormEvent, SetStateAction, useEffect, useState } from "react";
-import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useState } from "react";
+import { Link, Navigate, Outlet, Route, Routes, useNavigate } from "react-router-dom";
 import AdminPortal from "./pages/AdminPortal";
 import NgoPortal from "./pages/NgoPortal";
 import ProviderPortal from "./pages/ProviderPortal";
 import DriverPortal from "./pages/DriverPortal";
-import Citizen from "./pages/Citizen";
+import CitizenLayout from "./layouts/CitizenLayout";
+import CitizenHome from "./pages/citizen/CitizenHome";
+import CitizenMarket from "./pages/citizen/CitizenMarket";
+import CitizenOrders from "./pages/citizen/CitizenOrders";
+import CitizenOrderTrack from "./pages/citizen/CitizenOrderTrack";
+import CitizenWallet from "./pages/citizen/CitizenWallet";
+import CitizenRequestWater from "./pages/citizen/CitizenRequestWater";
 import MapView from "./pages/MapView";
 import LandingPage from "./pages/LandingPage";
-import CitizenLoginComingSoon from "./pages/CitizenLoginComingSoon";
+import CitizenAuth from "./pages/CitizenAuth";
 import AppLayout from "./layouts/AppLayout";
 import RequireRole, { AuthUser } from "./components/RequireRole";
 import Logo from "./components/Logo";
@@ -251,6 +257,17 @@ export function RoleFields({
   );
 }
 
+function UserContextOutlet({
+  user,
+  setUser,
+}: {
+  user: AuthUser;
+  setUser: Dispatch<SetStateAction<AuthUser | null>>;
+}) {
+  const outletContext = useMemo(() => ({ user, setUser }), [user, setUser]);
+  return <Outlet context={outletContext} />;
+}
+
 function AuthenticatedApp({
   user,
   setUser,
@@ -265,32 +282,42 @@ function AuthenticatedApp({
 
   return (
     <Routes>
-      <Route element={<AppLayout user={user} setUser={setUser} onLogout={logout} />}>
+      <Route element={<UserContextOutlet user={user} setUser={setUser} />}>
         <Route index element={<Navigate to={ROLE_HOME[user.role]} replace />} />
 
-        <Route element={<RequireRole role="admin" />}>
-          <Route path="/admin" element={<AdminPortal />} />
-          <Route path="/admin/map" element={<MapView />} />
-        </Route>
-
-        <Route element={<RequireRole role="ngo" />}>
-          <Route path="/ngo" element={<Navigate to={DEFAULT_NGO_PATH} replace />} />
-          <Route path="/ngo/map" element={<MapView />} />
-          <Route path="/ngo/:section" element={<NgoPortal />} />
-        </Route>
-
-        <Route element={<RequireRole role="provider" />}>
-          <Route path="/provider" element={<ProviderPortal />} />
-          <Route path="/provider/map" element={<MapView />} />
-        </Route>
-
-        <Route element={<RequireRole role="driver" />}>
-          <Route path="/driver" element={<DriverPortal />} />
-          <Route path="/driver/map" element={<MapView />} />
-        </Route>
-
         <Route element={<RequireRole role="citizen" />}>
-          <Route path="/citizen" element={<Citizen />} />
+          <Route element={<CitizenLayout />}>
+            <Route path="/citizen" element={<CitizenHome />} />
+            <Route path="/citizen/market" element={<CitizenMarket />} />
+            <Route path="/citizen/market/request" element={<CitizenRequestWater />} />
+            <Route path="/citizen/market/request/:providerId" element={<CitizenRequestWater />} />
+            <Route path="/citizen/orders" element={<CitizenOrders />} />
+            <Route path="/citizen/orders/:orderId" element={<CitizenOrderTrack />} />
+            <Route path="/citizen/wallet" element={<CitizenWallet />} />
+          </Route>
+        </Route>
+
+        <Route element={<AppLayout user={user} setUser={setUser} onLogout={logout} />}>
+          <Route element={<RequireRole role="admin" />}>
+            <Route path="/admin" element={<AdminPortal />} />
+            <Route path="/admin/map" element={<MapView />} />
+          </Route>
+
+          <Route element={<RequireRole role="ngo" />}>
+            <Route path="/ngo" element={<Navigate to={DEFAULT_NGO_PATH} replace />} />
+            <Route path="/ngo/map" element={<MapView />} />
+            <Route path="/ngo/:section" element={<NgoPortal />} />
+          </Route>
+
+          <Route element={<RequireRole role="provider" />}>
+            <Route path="/provider" element={<ProviderPortal />} />
+            <Route path="/provider/map" element={<MapView />} />
+          </Route>
+
+          <Route element={<RequireRole role="driver" />}>
+            <Route path="/driver" element={<DriverPortal />} />
+            <Route path="/driver/map" element={<MapView />} />
+          </Route>
         </Route>
 
         <Route path="*" element={<Navigate to={ROLE_HOME[user.role]} replace />} />
@@ -336,7 +363,17 @@ export default function App() {
             />
           }
         />
-        <Route path="/login/citizen" element={<CitizenLoginComingSoon />} />
+        <Route
+          path="/login/citizen"
+          element={
+            <CitizenAuth
+              onAuth={nextUser => {
+                setUser(nextUser);
+                navigate(ROLE_HOME[nextUser.role], { replace: true });
+              }}
+            />
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );

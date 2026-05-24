@@ -4,6 +4,7 @@ import { ROLE_HOME, Role } from "../routes";
 export type AuthUser = {
   id: string;
   email: string | null;
+  phone: string | null;
   firstName: string | null;
   lastName: string | null;
   role: Role;

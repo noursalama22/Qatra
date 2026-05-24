@@ -35,7 +35,10 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { path: "/driver/map", label: "خريطة الطريق" },
   ],
   citizen: [
-    { path: "/citizen", label: "بوابة المواطن", end: true },
+    { path: "/citizen", label: "الرئيسية", end: true },
+    { path: "/citizen/market", label: "طلب مياه" },
+    { path: "/citizen/orders", label: "طلباتي" },
+    { path: "/citizen/wallet", label: "المحفظة" },
   ],
 };
 
@@ -105,6 +108,12 @@ export function pageLabel(pathname: string, role: Role): string {
   if (role === "admin") return "لوحة الإشراف";
   if (role === "provider") return "بوابة المزود";
   if (role === "driver") return "مهامي";
-  if (role === "citizen") return "بوابة المواطن";
+  if (role === "citizen") {
+    if (pathname.startsWith("/citizen/orders/")) return "تتبع طلبي";
+    if (pathname === "/citizen/market") return "مزودو المياه";
+    if (pathname === "/citizen/orders") return "طلباتي";
+    if (pathname === "/citizen/wallet") return "المحفظة";
+    return "بوابة المواطن";
+  }
   return "بوابة المنظمة";
 }

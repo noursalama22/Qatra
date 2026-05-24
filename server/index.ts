@@ -4,13 +4,14 @@ import connectPgSimple from "connect-pg-simple";
 import { scrypt, randomBytes, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { db, pool } from "./db";
+import { runMigrations } from "./migrate";
 import {
   ngosTable, providersTable, driversTable, zonesTable,
   distributionTasksTable, deliveryOrdersTable, usersTable,
   citizensTable, signalsTable, gpsPositionsTable,
   userRolesTable, regionsTable, providerRegionRatesTable, ngoContractsTable,
 } from "@shared/schema";
-import { eq, count, sum, sql, desc, and } from "drizzle-orm";
+import { eq, count, sum, sql, desc, and, inArray } from "drizzle-orm";
 
 const app = express();
 app.use((_req, res, next) => {
@@ -45,7 +46,10 @@ app.use(session({
   },
 }));
 
-app.get("/api/healthz", (_req, res) => res.json({ status: "ok" }));
+app.get("/api/healthz", (_req, res) => res.json({
+  status: "ok",
+  features: { citizenAuth: true },
+}));
 
 const isAuthRole = (role: string): role is AuthRole => authRoles.includes(role as AuthRole);
 const isPublicRegistrationRole = (role: AuthRole) => publicRegistrationRoles.includes(role as typeof publicRegistrationRoles[number]);
@@ -54,6 +58,16 @@ const optionalClean = (value: unknown) => {
   const next = clean(value);
   return next || null;
 };
+
+function normalizePhone(raw: unknown) {
+  const digits = clean(raw).replace(/\D/g, "");
+  if (digits.length < 9) return "";
+  if (digits.startsWith("972")) return `+${digits}`;
+  if (digits.startsWith("970")) return `+${digits}`;
+  if (digits.startsWith("0") && digits.length >= 10) return `+970${digits.slice(1)}`;
+  if (digits.length === 9) return `+970${digits}`;
+  return `+${digits}`;
+}
 
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -114,6 +128,7 @@ async function getAuthUser(userId: string) {
   return {
     id: user.id,
     email: user.email,
+    phone: user.phone ?? null,
     firstName: user.firstName,
     lastName: user.lastName,
     profileImageUrl: user.profileImageUrl,
@@ -287,6 +302,68 @@ app.post("/api/auth/login", async (req, res) => {
 
     if (!user || !(await verifyPassword(password, user.passwordHash ?? null))) {
       return res.status(401).json({ error: "البريد الإلكتروني أو كلمة المرور غير صحيحة" });
+    }
+
+    setSessionUser(req, user.id);
+    const authUser = await getAuthUser(user.id);
+    if (!authUser) return res.status(403).json({ error: "لا يوجد دور مرتبط بهذا المستخدم" });
+    res.json(authUser);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post("/api/auth/citizen/register", async (req, res) => {
+  try {
+    const body = req.body as Record<string, unknown>;
+    const firstName = clean(body.firstName);
+    const lastName = clean(body.lastName);
+    const phone = normalizePhone(String(body.phone ?? ""));
+    const password = String(body.password ?? "");
+
+    if (!firstName || !lastName || !phone || password.length < 8) {
+      return res.status(400).json({ error: "الاسم ورقم الهاتف وكلمة مرور من 8 أحرف على الأقل مطلوبة" });
+    }
+
+    const [existing] = await db.select().from(usersTable).where(eq(usersTable.phone, phone));
+    if (existing) return res.status(409).json({ error: "رقم الهاتف مسجّل بالفعل" });
+
+    const passwordHash = await hashPassword(password);
+    const [user] = await db.insert(usersTable).values({
+      firstName,
+      lastName,
+      phone,
+      passwordHash,
+    }).returning();
+
+    const [defaultZone] = await db.select({ id: zonesTable.id }).from(zonesTable)
+      .where(eq(zonesTable.status, "active"))
+      .limit(1);
+    if (!defaultZone) {
+      return res.status(503).json({ error: "لا توجد مناطق نشطة — يُرجى المحاولة لاحقاً" });
+    }
+
+    const roleProfile = await createRoleProfile(user.id, "citizen", { zoneId: defaultZone.id });
+    await db.insert(userRolesTable).values({
+      userId: user.id,
+      role: "citizen",
+      status: roleProfile.status,
+      profileId: roleProfile.profileId,
+    });
+
+    setSessionUser(req, user.id);
+    const authUser = await getAuthUser(user.id);
+    res.status(201).json(authUser);
+  } catch (e) { res.status(400).json({ error: e instanceof Error ? e.message : String(e) }); }
+});
+
+app.post("/api/auth/citizen/login", async (req, res) => {
+  try {
+    const phone = normalizePhone(String(req.body.phone ?? ""));
+    const password = String(req.body.password ?? "");
+    if (!phone) return res.status(400).json({ error: "رقم الهاتف غير صحيح" });
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.phone, phone));
+    if (!user || !(await verifyPassword(password, user.passwordHash ?? null))) {
+      return res.status(401).json({ error: "رقم الهاتف أو كلمة المرور غير صحيحة" });
     }
 
     setSessionUser(req, user.id);
@@ -635,6 +712,41 @@ app.get("/api/map", async (_req, res) => {
 
 // ── Citizen Endpoints ──────────────────────────────────────────────────────
 
+app.get("/api/citizen/me", async (req, res) => {
+  try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+    if (authUser.role !== "citizen") {
+      return res.status(403).json({ error: "هذا المسار للمواطنين فقط" });
+    }
+
+    let profileId = typeof authUser.profile?.id === "string" ? authUser.profile.id : null;
+    if (!profileId) {
+      const [defaultZone] = await db.select({ id: zonesTable.id }).from(zonesTable)
+        .where(eq(zonesTable.status, "active"))
+        .limit(1);
+      if (!defaultZone) return res.status(503).json({ error: "لا توجد مناطق نشطة" });
+      const roleProfile = await createRoleProfile(authUser.id, "citizen", { zoneId: defaultZone.id });
+      await db.update(userRolesTable)
+        .set({ profileId: roleProfile.profileId, status: roleProfile.status })
+        .where(eq(userRolesTable.userId, authUser.id));
+      profileId = roleProfile.profileId;
+    }
+
+    const [citizen] = await db.select().from(citizensTable).where(eq(citizensTable.id, profileId!));
+    if (!citizen) return res.status(404).json({ error: "ملف المواطن غير موجود" });
+
+    const [zone] = await db.select().from(zonesTable).where(eq(zonesTable.id, citizen.zoneId));
+    res.json({
+      id: citizen.id,
+      userId: citizen.userId,
+      zoneId: citizen.zoneId,
+      zoneName: zone?.name ?? null,
+      createdAt: citizen.createdAt,
+    });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 // Active zones list (for zone picker)
 app.get("/api/citizen/zones", async (_req, res) => {
   try {
@@ -645,12 +757,36 @@ app.get("/api/citizen/zones", async (_req, res) => {
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
-// Distribution schedule for a zone
+// Distribution schedule for a zone (with NGO / provider names for citizen UI)
 app.get("/api/citizen/zones/:zoneId/schedule", async (req, res) => {
   try {
-    const data = await db.select().from(distributionTasksTable)
+    const tasks = await db.select().from(distributionTasksTable)
       .where(eq(distributionTasksTable.zoneId, req.params.zoneId))
       .orderBy(distributionTasksTable.scheduledAt);
+
+    const ngoIds = [...new Set(tasks.map(t => t.ngoId))];
+    const providerIds = [...new Set(tasks.flatMap(t => t.assignedProviderIds ?? []))];
+
+    const [ngos, providers] = await Promise.all([
+      ngoIds.length
+        ? db.select({ id: ngosTable.id, orgName: ngosTable.orgName }).from(ngosTable).where(inArray(ngosTable.id, ngoIds))
+        : Promise.resolve([]),
+      providerIds.length
+        ? db.select({ id: providersTable.id, companyName: providersTable.companyName }).from(providersTable).where(inArray(providersTable.id, providerIds))
+        : Promise.resolve([]),
+    ]);
+
+    const ngoMap = new Map(ngos.map(n => [n.id, n.orgName]));
+    const providerMap = new Map(providers.map(p => [p.id, p.companyName]));
+
+    const data = tasks.map(t => ({
+      ...t,
+      ngoName: ngoMap.get(t.ngoId) ?? null,
+      providerNames: (t.assignedProviderIds ?? [])
+        .map(id => providerMap.get(id))
+        .filter((name): name is string => Boolean(name)),
+    }));
+
     res.json({ data });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
@@ -682,21 +818,92 @@ app.post("/api/citizen/signals", async (req, res) => {
 // Place a delivery order
 app.post("/api/citizen/orders", async (req, res) => {
   try {
-    const { citizenId, providerId, quantityLiters, totalAmount } = req.body;
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+    if (authUser.role !== "citizen") {
+      return res.status(403).json({ error: "هذا المسار للمواطنين فقط" });
+    }
+
+    const {
+      citizenId,
+      providerId,
+      quantityLiters,
+      totalAmount,
+      scheduledAt,
+      paymentMethod,
+      deliveryNote,
+      mockPaymentToken,
+    } = req.body;
+
+    const profileId = typeof authUser.profile?.id === "string" ? authUser.profile.id : null;
+    if (!profileId || profileId !== citizenId) {
+      return res.status(403).json({ error: "لا يمكنك إنشاء طلب لحساب آخر" });
+    }
+
+    const liters = Number(quantityLiters);
+    if (!providerId || !Number.isFinite(liters) || liters <= 0) {
+      return res.status(400).json({ error: "بيانات الطلب غير صالحة" });
+    }
+
+    const allowedPayments = ["wallet", "cash", "card"];
+    if (paymentMethod && !allowedPayments.includes(paymentMethod)) {
+      return res.status(400).json({ error: "طريقة الدفع غير مدعومة" });
+    }
+
+    const subtotal = liters * 0.05;
+    const deliveryFee = Math.max(subtotal * 0.1, 2);
+    const computedTotal = (subtotal + deliveryFee).toFixed(2);
+
     const [order] = await db.insert(deliveryOrdersTable).values({
       citizenId,
       providerId,
       quantityLiters: String(quantityLiters),
-      totalAmount: String(totalAmount),
+      totalAmount: totalAmount != null ? String(totalAmount) : computedTotal,
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+      paymentMethod: paymentMethod ?? "wallet",
+      deliveryNote: deliveryNote?.trim() || null,
+      mockPaymentToken: mockPaymentToken ?? (paymentMethod === "card" ? `mock-${Date.now()}` : null),
       status: "pending",
     }).returning();
     res.status(201).json(order);
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+// Get single order (citizen owns it)
+app.get("/api/citizen/orders/:orderId", async (req, res) => {
+  try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+    if (authUser.role !== "citizen") {
+      return res.status(403).json({ error: "هذا المسار للمواطنين فقط" });
+    }
+
+    const [order] = await db.select().from(deliveryOrdersTable)
+      .where(eq(deliveryOrdersTable.id, req.params.orderId));
+    if (!order) return res.status(404).json({ error: "الطلب غير موجود" });
+
+    const profileId = typeof authUser.profile?.id === "string" ? authUser.profile.id : null;
+    if (!profileId || order.citizenId !== profileId) {
+      return res.status(403).json({ error: "غير مصرح" });
+    }
+
+    res.json(order);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 // Get orders for a citizen
 app.get("/api/citizen/:citizenId/orders", async (req, res) => {
   try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+    if (authUser.role !== "citizen") {
+      return res.status(403).json({ error: "هذا المسار للمواطنين فقط" });
+    }
+    const profileId = typeof authUser.profile?.id === "string" ? authUser.profile.id : null;
+    if (!profileId || profileId !== req.params.citizenId) {
+      return res.status(403).json({ error: "غير مصرح" });
+    }
+
     const data = await db.select().from(deliveryOrdersTable)
       .where(eq(deliveryOrdersTable.citizenId, req.params.citizenId))
       .orderBy(deliveryOrdersTable.createdAt);
@@ -935,4 +1142,14 @@ app.get("/api/ngos/:ngoId/reports", async (req, res) => {
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 
-app.listen(PORT, "0.0.0.0", () => console.log(`API server running on port ${PORT}`));
+async function start() {
+  await runMigrations();
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`API server running on port ${PORT} (citizen auth enabled)`);
+  });
+}
+
+start().catch(error => {
+  console.error("Failed to start server:", error);
+  process.exit(1);
+});
