@@ -232,11 +232,17 @@ function ActionButton({ status, approved, onAction }: ActionButtonProps) {
   }
   if (status === "accepted") {
     return (
-      <button
-        className="btn btn-outline"
-        style={{ fontSize: 12, padding: "6px 14px", whiteSpace: "nowrap" }}
-        onClick={e => { e.stopPropagation(); onAction("view-driver"); }}
-      >عرض السائق</button>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <button
+          style={{ fontSize: 12, padding: "6px 14px", whiteSpace: "nowrap", background: "#fff7ed", color: "#b45309", border: "1.5px solid #fbbf24", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}
+          onClick={e => { e.stopPropagation(); onAction("reassign"); }}
+        >إعادة تعيين سائق</button>
+        <button
+          className="btn btn-outline"
+          style={{ fontSize: 12, padding: "6px 14px", whiteSpace: "nowrap" }}
+          onClick={e => { e.stopPropagation(); onAction("view-driver"); }}
+        >عرض السائق</button>
+      </div>
     );
   }
   if (status === "in_progress") {
@@ -553,7 +559,7 @@ function Timeline({ items }: { items: { label: string; date: string; note?: stri
   );
 }
 
-type AssignTarget = { taskId: string; taskLabel: string; region: string; quantity: number; type: "ngo" | "citizen" };
+type AssignTarget = { taskId: string; taskLabel: string; region: string; quantity: number; type: "ngo" | "citizen"; isReassign?: boolean; currentDriverName?: string };
 
 function AssignDriverModal({
   target,
@@ -587,7 +593,9 @@ function AssignDriverModal({
           <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
             {step === "select" ? "الخطوة 1 من 2 — اختر السائق" : "الخطوة 2 من 2 — تأكيد التعيين"}
           </div>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>تعيين سائق</div>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>
+            {target.isReassign ? "إعادة تعيين سائق" : "تعيين سائق"}
+          </div>
           <div style={{ fontSize: 12, opacity: 0.75, marginTop: 3 }}>{target.taskLabel} · {target.region} · {fmtVol(target.quantity)}</div>
           {/* Step indicator */}
           <div style={{ display: "flex", gap: 6, marginTop: 14 }}>
@@ -602,11 +610,14 @@ function AssignDriverModal({
           {step === "select" && (
             <>
               <p style={{ fontSize: 13, color: "#6b8aa0", marginBottom: 16 }}>
-                اختر أحد السائقين النشطين أدناه لتعيينه على هذه المهمة.
+                {target.isReassign
+                  ? "اختر السائق الجديد. السائق الحالي سيتم إلغاء تعيينه فور التأكيد."
+                  : "اختر أحد السائقين النشطين أدناه لتعيينه على هذه المهمة."}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {ACTIVE_DRIVERS.map(driver => {
                   const isSelected = selected?.id === driver.id;
+                  const isCurrent = target.isReassign && target.currentDriverName === driver.name;
                   return (
                     <button
                       key={driver.id}
@@ -615,22 +626,27 @@ function AssignDriverModal({
                       style={{
                         display: "flex", alignItems: "center", gap: 14,
                         padding: "14px 16px", borderRadius: 12, cursor: "pointer",
-                        border: isSelected ? "2px solid #0284c7" : "2px solid #d8eef8",
-                        background: isSelected ? "#f0f9ff" : "#fafcff",
+                        border: isSelected ? "2px solid #0284c7" : isCurrent ? "2px solid #f59e0b" : "2px solid #d8eef8",
+                        background: isSelected ? "#f0f9ff" : isCurrent ? "#fffbeb" : "#fafcff",
                         textAlign: "right", fontFamily: "inherit", width: "100%",
                         transition: "all 0.15s",
                       }}
                     >
                       <div style={{
                         width: 38, height: 38, borderRadius: "50%", flexShrink: 0,
-                        background: isSelected ? "#0284c7" : "#d8eef8",
+                        background: isSelected ? "#0284c7" : isCurrent ? "#f59e0b" : "#d8eef8",
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        color: isSelected ? "#fff" : "#6b8aa0", fontWeight: 800, fontSize: 14,
+                        color: isSelected || isCurrent ? "#fff" : "#6b8aa0", fontWeight: 800, fontSize: 14,
                       }}>
                         {driver.name.charAt(0)}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: isSelected ? "#0f3d5c" : "#12384f" }}>{driver.name}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 700, fontSize: 14, color: isSelected ? "#0f3d5c" : "#12384f" }}>{driver.name}</span>
+                          {isCurrent && (
+                            <span style={{ fontSize: 10, fontWeight: 700, background: "#fef3c7", color: "#b45309", border: "1px solid #fbbf24", borderRadius: 10, padding: "2px 8px" }}>معيّن حالياً</span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 12, color: "#6b8aa0", marginTop: 2, display: "flex", gap: 12, flexWrap: "wrap" }}>
                           <span>🚗 {driver.plate}</span>
                           <span>💧 {driver.capacityLiters.toLocaleString("ar-AE")} لتر</span>
@@ -889,17 +905,19 @@ export default function ProviderTasks() {
   const handleAssignConfirm = (driver: DriverOption) => {
     if (!assignTarget) return;
     const driverData = { name: driver.name, plate: driver.plate, region: driver.region };
-    const timeEntry = { label: "تعيين السائق", date: nowLabel() };
+    const timeEntry = assignTarget.isReassign
+      ? { label: `إعادة تعيين السائق — السابق: ${assignTarget.currentDriverName ?? "—"}`, date: nowLabel() }
+      : { label: "تعيين السائق", date: nowLabel() };
     if (assignTarget.type === "ngo") {
       setNgoTasks(prev => prev.map(t =>
         t.id === assignTarget.taskId
-          ? { ...t, status: "accepted" as const, driver: driverData, timeline: [...t.timeline, timeEntry] }
+          ? { ...t, status: assignTarget.isReassign ? t.status : "accepted" as const, driver: driverData, timeline: [...t.timeline, timeEntry] }
           : t
       ));
     } else {
       setCitTasks(prev => prev.map(t =>
         t.id === assignTarget.taskId
-          ? { ...t, status: "accepted" as const, driver: driverData, timeline: [...t.timeline, timeEntry] }
+          ? { ...t, status: assignTarget.isReassign ? t.status : "accepted" as const, driver: driverData, timeline: [...t.timeline, timeEntry] }
           : t
       ));
     }
@@ -1008,6 +1026,8 @@ export default function ProviderTasks() {
                             onAction={action => {
                               if (action === "assign") {
                                 setAssignTarget({ taskId: task.id, taskLabel: task.tripNumber, region: task.region, quantity: task.quantityLiters, type: "ngo" });
+                              } else if (action === "reassign") {
+                                setAssignTarget({ taskId: task.id, taskLabel: task.tripNumber, region: task.region, quantity: task.quantityLiters, type: "ngo", isReassign: true, currentDriverName: task.driver?.name });
                               } else if (action === "approve") {
                                 handleNgoApprove(task.id);
                               } else {
@@ -1097,6 +1117,8 @@ export default function ProviderTasks() {
                             onAction={action => {
                               if (action === "assign") {
                                 setAssignTarget({ taskId: task.id, taskLabel: task.orderNumber, region: task.region, quantity: task.quantityLiters, type: "citizen" });
+                              } else if (action === "reassign") {
+                                setAssignTarget({ taskId: task.id, taskLabel: task.orderNumber, region: task.region, quantity: task.quantityLiters, type: "citizen", isReassign: true, currentDriverName: task.driver?.name });
                               } else if (action === "approve") {
                                 handleCitApprove(task.id);
                               } else {
