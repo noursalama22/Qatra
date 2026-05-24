@@ -1,4 +1,5 @@
-import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { Dispatch, FormEvent, SetStateAction, useEffect, useState } from "react";
+import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import AdminPortal from "./pages/AdminPortal";
 import NgoPortal from "./pages/NgoPortal";
 import ProviderPortal from "./pages/ProviderPortal";
@@ -9,20 +10,17 @@ import NotificationBell from "./components/NotificationBell";
 import DriverPortal from "./pages/DriverPortal";
 import Citizen from "./pages/Citizen";
 import MapView from "./pages/MapView";
+import LandingPage from "./pages/LandingPage";
+import CitizenLoginComingSoon from "./pages/CitizenLoginComingSoon";
+import AppLayout from "./layouts/AppLayout";
+import RequireRole, { AuthUser } from "./components/RequireRole";
+import Logo from "./components/Logo";
 import { api, Provider, Zone } from "./api";
+import { DEFAULT_NGO_PATH, ROLE_HOME, Role } from "./routes";
 
-type Role = "admin" | "ngo" | "provider" | "driver" | "citizen";
+export type AuthIntent = "provider" | "default";
+
 type AuthMode = "login" | "register";
-
-type AuthUser = {
-  id: string;
-  email: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  role: Role;
-  roleStatus: "pending" | "approved" | "rejected";
-  profile: Record<string, any> | null;
-};
 
 type AuthForm = {
   role: Role;
@@ -44,11 +42,6 @@ type AuthForm = {
   zoneId: string;
   lat: string;
   lng: string;
-};
-
-type ProfileDraft = AuthForm & {
-  currentPassword: string;
-  newPassword: string;
 };
 
 const ROLES: { id: Role; label: string; color: string }[] = [
@@ -115,42 +108,18 @@ const emptyAuthForm = (): AuthForm => ({
   lng: "",
 });
 
-const roleStatusLabel = (status: AuthUser["roleStatus"]) => ({
-  approved: "معتمد",
-  pending: "بانتظار الموافقة",
-  rejected: "مرفوض",
-})[status];
-
-function getProfileDraft(user: AuthUser): ProfileDraft {
-  const base = emptyAuthForm();
-  const profile = user.profile ?? {};
-  return {
-    ...base,
-    role: user.role,
-    firstName: user.firstName ?? "",
-    lastName: user.lastName ?? "",
-    email: user.email ?? "",
-    orgName: profile.orgName ?? "",
-    country: profile.country ?? "فلسطين",
-    companyName: profile.companyName ?? "",
-    contactEmail: profile.contactEmail ?? "",
-    description: profile.description ?? "",
-    operatingModes: Array.isArray(profile.operatingModes) ? profile.operatingModes : ["commercial"],
-    driverType: profile.driverType ?? "independent",
-    providerId: profile.providerId ?? "",
-    phone: profile.phone ?? "",
-    vehicleType: profile.vehicleType ?? "",
-    zoneId: profile.zoneId ?? "",
-    lat: profile.lat ?? "",
-    lng: profile.lng ?? "",
-    currentPassword: "",
-    newPassword: "",
-  };
-}
-
-function AuthScreen({ onAuth }: { onAuth: (user: AuthUser) => void }) {
+function AuthScreen({
+  onAuth,
+  intent = "default",
+}: {
+  onAuth: (user: AuthUser) => void;
+  intent?: AuthIntent;
+}) {
   const [mode, setMode] = useState<AuthMode>("login");
-  const [form, setForm] = useState<AuthForm>(emptyAuthForm);
+  const [form, setForm] = useState<AuthForm>(() => ({
+    ...emptyAuthForm(),
+    role: intent === "provider" ? "provider" : "ngo",
+  }));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -181,10 +150,16 @@ function AuthScreen({ onAuth }: { onAuth: (user: AuthUser) => void }) {
   return (
     <main className="auth-page" dir="rtl">
       <section className="auth-panel">
+        <Link to="/" className="auth-back">
+          ← العودة للرئيسية
+        </Link>
         <div className="auth-brand">
-          <h1>Qatra v3</h1>
-          <p>منصة توزيع المياه</p>
+          <Logo />
+          <p style={{ marginTop: 8 }}>منصة توزيع المياه</p>
         </div>
+        {intent === "provider" && (
+          <div className="auth-intent-label">دخول مزود الخدمة — لوحة العمليات</div>
+        )}
 
         <div className="auth-tabs">
           <button className={mode === "login" ? "auth-tab-active" : ""} onClick={() => setMode("login")}>تسجيل الدخول</button>
@@ -230,14 +205,14 @@ function AuthScreen({ onAuth }: { onAuth: (user: AuthUser) => void }) {
   );
 }
 
-function RoleFields({
+export function RoleFields({
   form,
   setForm,
   zones,
   providers,
   showAdminCode = false,
 }: {
-  form: AuthForm | ProfileDraft;
+  form: AuthForm | (AuthForm & { currentPassword: string; newPassword: string });
   setForm: Dispatch<SetStateAction<any>>;
   zones: Zone[];
   providers: Provider[];
@@ -312,24 +287,58 @@ function RoleFields({
   );
 }
 
+function AuthenticatedApp({
+  user,
+  setUser,
+}: {
+  user: AuthUser;
+  setUser: Dispatch<SetStateAction<AuthUser | null>>;
+}) {
+  const logout = async () => {
+    await api.post("/auth/logout", {});
+    setUser(null);
+  };
+
+  return (
+    <Routes>
+      <Route element={<AppLayout user={user} setUser={setUser} onLogout={logout} />}>
+        <Route index element={<Navigate to={ROLE_HOME[user.role]} replace />} />
+
+        <Route element={<RequireRole role="admin" />}>
+          <Route path="/admin" element={<AdminPortal />} />
+          <Route path="/admin/map" element={<MapView />} />
+        </Route>
+
+        <Route element={<RequireRole role="ngo" />}>
+          <Route path="/ngo" element={<Navigate to={DEFAULT_NGO_PATH} replace />} />
+          <Route path="/ngo/map" element={<MapView />} />
+          <Route path="/ngo/:section" element={<NgoPortal />} />
+        </Route>
+
+        <Route element={<RequireRole role="provider" />}>
+          <Route path="/provider" element={<ProviderPortal />} />
+          <Route path="/provider/map" element={<MapView />} />
+        </Route>
+
+        <Route element={<RequireRole role="driver" />}>
+          <Route path="/driver" element={<DriverPortal />} />
+          <Route path="/driver/map" element={<MapView />} />
+        </Route>
+
+        <Route element={<RequireRole role="citizen" />}>
+          <Route path="/citizen" element={<Citizen />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to={ROLE_HOME[user.role]} replace />} />
+      </Route>
+    </Routes>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [page, setPage] = useState<"main" | "map">("main");
-  const [profileDraft, setProfileDraft] = useState<ProfileDraft>(() => ({ ...emptyAuthForm(), currentPassword: "", newPassword: "" }));
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const [zones, setZones] = useState<Zone[]>([]);
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  const role = user?.role ?? "citizen";
-  const currentRole = ROLES.find(r => r.id === role)!;
-  const displayName = user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : "مستخدم Qatra";
-  const initials = `${user?.firstName?.trim().charAt(0) ?? "Q"}${user?.lastName?.trim().charAt(0) ?? ""}`;
-  const statusClass = `role-status role-status-${user?.roleStatus ?? "approved"}`;
+  const navigate = useNavigate();
 
   useEffect(() => {
     api.get<AuthUser>("/auth/me")
@@ -471,42 +480,36 @@ export default function App() {
         </header>
 
         {renderPage()}
+  if (authLoading) {
+    return (
+      <div className="loading auth-loading">
+        <div className="spinner" />
+        <p>جارٍ تحميل الجلسة...</p>
       </div>
+    );
+  }
 
-      {profileOpen && (
-        <div className="modal-backdrop" onClick={() => setProfileOpen(false)}>
-          <form className="modal profile-modal" onSubmit={saveProfile} onClick={event => event.stopPropagation()}>
-            <h3>إعدادات الملف الشخصي</h3>
-            <div className="profile-modal-user">
-              <span className="avatar avatar-lg" style={{ background: currentRole.color }}>{initials}</span>
-              <div>
-                <strong>{displayName}</strong>
-                <span>{currentRole.label} · {roleStatusLabel(user.roleStatus)}</span>
-              </div>
-            </div>
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route
+          path="/login/provider"
+          element={
+            <AuthScreen
+              intent="provider"
+              onAuth={nextUser => {
+                setUser(nextUser);
+                navigate(ROLE_HOME[nextUser.role], { replace: true });
+              }}
+            />
+          }
+        />
+        <Route path="/login/citizen" element={<CitizenLoginComingSoon />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
+  }
 
-            <div className="auth-grid">
-              <label className="form-label">الاسم الأول<input value={profileDraft.firstName} onChange={event => setProfileDraft(draft => ({ ...draft, firstName: event.target.value }))} required /></label>
-              <label className="form-label">اسم العائلة<input value={profileDraft.lastName} onChange={event => setProfileDraft(draft => ({ ...draft, lastName: event.target.value }))} required /></label>
-            </div>
-            <label className="form-label">البريد الإلكتروني<input type="email" value={profileDraft.email} onChange={event => setProfileDraft(draft => ({ ...draft, email: event.target.value }))} required /></label>
-            <RoleFields form={profileDraft} setForm={setProfileDraft} {...roleFieldsOptions} />
-            <div className="auth-grid">
-              <label className="form-label">كلمة المرور الحالية<input type="password" value={profileDraft.currentPassword} onChange={event => setProfileDraft(draft => ({ ...draft, currentPassword: event.target.value }))} /></label>
-              <label className="form-label">كلمة مرور جديدة<input type="password" value={profileDraft.newPassword} onChange={event => setProfileDraft(draft => ({ ...draft, newPassword: event.target.value }))} minLength={8} /></label>
-            </div>
-
-            {profileError && <div className="form-error">{profileError}</div>}
-
-            <div className="modal-actions">
-              <button type="button" className="btn btn-outline" onClick={() => setProfileOpen(false)}>إلغاء</button>
-              <button type="submit" className="btn btn-primary" disabled={savingProfile}>
-                {savingProfile ? "جارٍ الحفظ..." : "حفظ التغييرات"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-    </div>
-  );
+  return <AuthenticatedApp user={user} setUser={setUser} />;
 }

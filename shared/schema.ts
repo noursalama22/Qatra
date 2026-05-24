@@ -26,6 +26,7 @@ export const userRoleEnum = pgEnum("user_role", ["admin", "ngo", "provider", "dr
 export const zoneStatusEnum = pgEnum("zone_status", ["active", "inactive"]);
 export const paymentRelatedTypeEnum = pgEnum("payment_related_type", ["delivery_order", "subscription"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "completed", "failed", "refunded"]);
+export const contractStatusEnum = pgEnum("contract_status", ["active", "pending", "expired", "cancelled"]);
 
 // ── Sessions (Replit Auth required) ───────────────────────────────────────────
 
@@ -172,6 +173,66 @@ export const citizensTable = pgTable(
   (t) => [index("idx_citizens_user_id").on(t.userId), index("idx_citizens_zone_id").on(t.zoneId)],
 );
 
+// ── Regions (governorate-level areas for NGO contracts) ───────────────────────
+
+export const regionsTable = pgTable("regions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Region = typeof regionsTable.$inferSelect;
+
+// ── Provider regional pricing ─────────────────────────────────────────────────
+
+export const providerRegionRatesTable = pgTable(
+  "provider_region_rates",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    providerId: varchar("provider_id").notNull().references(() => providersTable.id, { onDelete: "cascade" }),
+    regionId: varchar("region_id").notNull().references(() => regionsTable.id, { onDelete: "cascade" }),
+    pricePerLiter: numeric("price_per_liter", { precision: 10, scale: 4 }).notNull(),
+    measurementUnit: varchar("measurement_unit", { length: 50 }).notNull().default("liter"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("uq_provider_region_rates").on(t.providerId, t.regionId),
+    index("idx_provider_region_rates_region").on(t.regionId),
+  ],
+);
+
+export type ProviderRegionRate = typeof providerRegionRatesTable.$inferSelect;
+
+// ── NGO ↔ Provider contracts ──────────────────────────────────────────────────
+
+export const ngoContractsTable = pgTable(
+  "ngo_contracts",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    ngoId: varchar("ngo_id").notNull().references(() => ngosTable.id, { onDelete: "cascade" }),
+    providerId: varchar("provider_id").notNull().references(() => providersTable.id, { onDelete: "cascade" }),
+    regionId: varchar("region_id").notNull().references(() => regionsTable.id, { onDelete: "cascade" }),
+    dailyQuantityLiters: numeric("daily_quantity_liters", { precision: 12, scale: 2 }).notNull(),
+    pricePerLiter: numeric("price_per_liter", { precision: 10, scale: 4 }).notNull(),
+    status: contractStatusEnum("status").notNull().default("active"),
+    startDate: timestamp("start_date", { withTimezone: true }).notNull().defaultNow(),
+    endDate: timestamp("end_date", { withTimezone: true }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index("idx_ngo_contracts_ngo_id").on(t.ngoId),
+    index("idx_ngo_contracts_region_id").on(t.regionId),
+    index("idx_ngo_contracts_provider_id").on(t.providerId),
+  ],
+);
+
+export type NgoContract = typeof ngoContractsTable.$inferSelect;
+
 // ── Zones ─────────────────────────────────────────────────────────────────────
 
 export const zonesTable = pgTable(
@@ -179,6 +240,7 @@ export const zonesTable = pgTable(
   {
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     ngoId: varchar("ngo_id").notNull().references(() => ngosTable.id, { onDelete: "cascade" }),
+    regionId: varchar("region_id").references(() => regionsTable.id, { onDelete: "set null" }),
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description"),
     boundary: jsonb("boundary"),
@@ -189,7 +251,7 @@ export const zonesTable = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },
-  (t) => [index("idx_zones_ngo_id").on(t.ngoId)],
+  (t) => [index("idx_zones_ngo_id").on(t.ngoId), index("idx_zones_region_id").on(t.regionId)],
 );
 
 export type Zone = typeof zonesTable.$inferSelect;

@@ -42,6 +42,30 @@ export type Ngo = { id: string; orgName: string; contactEmail: string; country: 
 export type Provider = { id: string; companyName: string; contactEmail: string; status: string; operatingModes: string[]; description: string };
 export type Driver = { id: string; driverType: string; providerId: string | null; status: string; phone: string; vehicleType: string };
 export type Task = { id: string; ngoId: string; zoneId: string; status: string; quantityLiters: string; scheduledAt: string; notes: string | null };
+export type Region = { id: string; name: string; description: string | null; sortOrder: number };
+export type RegionProvider = {
+  id: string; companyName: string; operatingModes: string[]; status: string;
+  pricePerLiter: string; measurementUnit: string;
+};
+export type NgoContract = {
+  id: string; ngoId: string; providerId: string; regionId: string;
+  dailyQuantityLiters: string; pricePerLiter: string; status: string;
+  startDate: string; endDate: string | null; notes: string | null; createdAt: string;
+  providerName: string; regionName: string;
+};
+export type NgoReport = {
+  period: { from: string; to: string };
+  metrics: {
+    totalWaterDistributed: { value: number; formatted: string; unit: string; trend: number };
+    deliveryEfficiency: { value: number; label: string };
+    activeSuppliers: { value: number; total: number };
+    criticalPoints: { value: number; label: string };
+  };
+  marketShare: Array<{ providerId: string; providerName: string; liters: number; share: number }>;
+  weeklyTrend: Array<{ week: string; actual: number; target: number }>;
+  distributionByRegion: Array<{ regionId: string; regionName: string; liters: number }>;
+  supplierPerformance: Array<{ providerId: string; providerName: string; adherence: number; totalLiters: number }>;
+};
 export type Order = { id: string; citizenId: string; providerId: string; status: string; quantityLiters: string; totalAmount: string; createdAt: string };
 export type Stats = {
   totalZones: number; activeZones: number;
