@@ -926,12 +926,63 @@ textarea.form-control { resize: vertical; min-height: 80px; } /* Filters bar */
 .dash-cost-total { border-top: 1px solid #d8eef8; margin-top: 6px; padding-top: 10px; font-size: 15px; }
 .dash-send-btn { width: 100%; justify-content: center; padding: 13px; font-size: 15px; }
 
+/* NGO fullscreen map (/ngo/map) */
+.map-page--ngo {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.map-page--ngo .ngo-map-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ngo-map-full {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+.ngo-map-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+}
+.ngo-map-legend-overlay {
+  position: absolute;
+  bottom: 20px;
+  inset-inline-start: 16px;
+  z-index: 500;
+  background: #fff;
+  border: 1px solid #d8eef8;
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 4px 20px rgba(18, 56, 79, 0.08);
+  max-width: 240px;
+}
+.ngo-map-hint {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #eef8fd;
+}
+.dash-schedule-view--fullscreen {
+  height: calc(100vh - 68px);
+  min-height: 400px;
+  overflow: auto;
+}
+
 @media (max-width: 900px) {
   .dash-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; height: auto; min-height: 0; }
   .dash-sidebar { grid-row: auto; max-height: 200px; }
   .dash-map-wrap { min-height: 360px; }
   .dash-tasks-bar { grid-column: 1; }
   .dash-schedule-body { grid-template-columns: 1fr; }
+  .ngo-map-legend-overlay {
+    bottom: 12px;
+    inset-inline-start: 8px;
+    max-width: min(220px, calc(100% - 16px));
+  }
 }
 
 @media (max-width: 1024px) {

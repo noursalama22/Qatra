@@ -21,10 +21,10 @@ export function useAppContext() {
 }
 
 export default function RequireRole({ role }: { role: Role | Role[] }) {
-  const { user } = useAppContext();
+  const ctx = useAppContext();
   const allowed = Array.isArray(role) ? role : [role];
-  if (!allowed.includes(user.role)) {
-    return <Navigate to={ROLE_HOME[user.role]} replace />;
+  if (!allowed.includes(ctx.user.role)) {
+    return <Navigate to={ROLE_HOME[ctx.user.role]} replace />;
   }
-  return <Outlet />;
+  return <Outlet context={ctx} />;
 }
