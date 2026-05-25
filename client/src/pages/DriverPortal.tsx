@@ -470,7 +470,7 @@ export default function DriverPortal() {
                       }}
                       style={{
                         display: "flex",
-                        flexDirection: "row-reverse",
+                        flexDirection: "row",
                         alignItems: "center",
                         gap: 14,
                         background: "#fff",
