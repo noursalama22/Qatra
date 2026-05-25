@@ -22,6 +22,7 @@ import CitizenAuth from "./pages/CitizenAuth";
 import AppLayout from "./layouts/AppLayout";
 import RequireRole, { AuthUser } from "./components/RequireRole";
 import Logo from "./components/Logo";
+import InstallBanner from "./components/InstallBanner";
 import { api, Provider, Zone } from "./api";
 import { DEFAULT_NGO_PATH, ROLE_HOME, Role } from "./routes";
 
@@ -408,5 +409,10 @@ export default function App() {
     );
   }
 
-  return <AuthenticatedApp user={user} setUser={setUser} />;
+  return (
+    <>
+      <InstallBanner />
+      <AuthenticatedApp user={user} setUser={setUser} />
+    </>
+  );
 }
