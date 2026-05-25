@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   root: path.resolve(import.meta.dirname, "client"),
   server: {
-    port: 5173,
+    port: 5000,
     strictPort: true,
     host: "0.0.0.0",
     allowedHosts: true,

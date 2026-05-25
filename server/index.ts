@@ -36,7 +36,7 @@ app.use(session({
   store: new PgSession({
     pool,
     tableName: "sessions",
-    createTableIfMissing: false,
+    createTableIfMissing: true,
   }),
   name: "qatra.sid",
   secret: process.env.SESSION_SECRET || "qatra-local-dev-session-secret",
@@ -45,7 +45,7 @@ app.use(session({
   cookie: {
     httpOnly: true,
     sameSite: "lax",
-    secure: false,
+    secure: process.env.NODE_ENV === "production",
     maxAge: 1000 * 60 * 60 * 24 * 14,
   },
 }));
