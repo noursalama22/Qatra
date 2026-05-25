@@ -85,6 +85,7 @@ export default function DriverPortal() {
   const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "in_progress" | "delivered">("all");
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
   const [showInstallBtn, setShowInstallBtn] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
 
   const mapDivRef = useRef<HTMLDivElement>(null);
   const leafletRef = useRef<LeafletMap | null>(null);
@@ -154,15 +155,18 @@ export default function DriverPortal() {
     const goOffline = () => setIsOnline(false);
     const onInstallPrompt = (e: Event) => { e.preventDefault(); setInstallPrompt(e); setShowInstallBtn(true); };
     const onAppInstalled = () => setShowInstallBtn(false);
+    const onResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
     window.addEventListener("beforeinstallprompt", onInstallPrompt);
     window.addEventListener("appinstalled", onAppInstalled);
+    window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
       window.removeEventListener("beforeinstallprompt", onInstallPrompt);
       window.removeEventListener("appinstalled", onAppInstalled);
+      window.removeEventListener("resize", onResize);
       stopGps();
     };
   }, [loadTasks, loadOfflineCount, syncOfflineQueue]);
@@ -454,11 +458,11 @@ export default function DriverPortal() {
             </div>
           </div>
 
-          {/* ── Two-column body ── */}
+          {/* ── Body (two-column on desktop, single-column on mobile) ── */}
           <div style={{ display: "flex", flex: 1, overflow: "hidden", direction: "rtl" }}>
 
-            {/* RIGHT column — cards list (RTL start) */}
-            <div style={{ flex: "0 0 50%", display: "flex", flexDirection: "column", borderLeft: "1.5px solid #e0f2fe", background: "#f8faff", overflow: "hidden" }}>
+            {/* Cards column — full width on mobile, 50% on desktop */}
+            <div style={{ flex: isMobile ? "1 1 100%" : "0 0 50%", display: "flex", flexDirection: "column", borderLeft: isMobile ? "none" : "1.5px solid #e0f2fe", background: "#f8faff", overflow: "hidden" }}>
 
               {/* Filter tabs */}
               {(() => {
@@ -624,8 +628,8 @@ export default function DriverPortal() {
               </div>
             </div>
 
-            {/* LEFT column — map (RTL end, fills remaining width) */}
-            <div style={{ flex: 1, position: "relative", background: "#e0f2fe" }}>
+            {/* LEFT column — map (desktop only) */}
+            {!isMobile && <div style={{ flex: 1, position: "relative", background: "#e0f2fe" }}>
               {/* Legend */}
               <div style={{ position: "absolute", top: 10, right: 10, zIndex: 1000, background: "rgba(255,255,255,0.92)", borderRadius: 10, padding: "6px 12px", display: "flex", gap: 12, fontSize: 11, fontWeight: 600, color: "#475569", boxShadow: "0 1px 6px rgba(0,0,0,0.10)", backdropFilter: "blur(4px)" }}>
                 <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#f59e0b", marginLeft: 4 }} />معلقة</span>
@@ -633,7 +637,7 @@ export default function DriverPortal() {
                 <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#22c55e", marginLeft: 4 }} />مُسلَّمة</span>
               </div>
               <div ref={dashMapDivRef} style={{ position: "absolute", inset: 0 }} />
-            </div>
+            </div>}
           </div>
         </div>
       )}
