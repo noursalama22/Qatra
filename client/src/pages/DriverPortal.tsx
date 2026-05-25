@@ -244,14 +244,30 @@ export default function DriverPortal() {
     reader.readAsDataURL(file);
   }
 
+  function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
   async function submitProof() {
     if (!activeTask || !proofFile) return;
     setCompleting(true);
     try {
+      const proofDataUrl = await fileToBase64(proofFile);
+      const gps = gpsPosRef.current;
       if (navigator.onLine) {
         await fetch(`/api/driver/tasks/${activeTask.id}`, {
           method: "PATCH", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "delivered" }),
+          body: JSON.stringify({
+            status: "delivered",
+            proofPhotoDataUrl: proofDataUrl,
+            lat: gps?.lat ?? null,
+            lng: gps?.lng ?? null,
+          }),
         });
       } else {
         const queue = JSON.parse(localStorage.getItem(OFFLINE_KEY) ?? "[]");

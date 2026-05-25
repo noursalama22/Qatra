@@ -16,6 +16,8 @@ type NgoTask = {
   notes: string | null;
   timeline: { label: string; date: string; note?: string }[];
   deliveryPhotos: string[];
+  driverGps?: [number, number];
+  destGps?: [number, number];
   parentContractId: string;
   deliveryApproved?: boolean;
 };
@@ -728,9 +730,12 @@ function ApproveModal({
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const driverPhotos = target.deliveryPhotos;
-  const distance = haversineMeters(target.driverGps[0], target.driverGps[1], target.destGps[0], target.destGps[1]);
-  const locationOk = distance <= 200;
-  const canApprove = locationOk;
+  const hasGps = target.driverGps[0] !== 0 || target.driverGps[1] !== 0;
+  const distance = hasGps
+    ? haversineMeters(target.driverGps[0], target.driverGps[1], target.destGps[0], target.destGps[1])
+    : null;
+  const locationOk = distance !== null ? distance <= 200 : null;
+  const canApprove = locationOk !== false;
 
   const sectionLabel: React.CSSProperties = { fontSize: 10, color: "#0284c7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 };
   const card: React.CSSProperties = { background: "#f8fcff", border: "0.5px solid #d8eef8", borderRadius: 10, padding: "14px 14px" };
@@ -784,10 +789,20 @@ function ApproveModal({
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                 <div style={{ fontSize: 11, color: "#6b8aa0", lineHeight: 1.7 }}>
-                  <div>موقع السائق: {target.driverGps[0].toFixed(4)}, {target.driverGps[1].toFixed(4)}</div>
-                  <div>الوجهة المطلوبة: {target.destGps[0].toFixed(4)}, {target.destGps[1].toFixed(4)}</div>
+                  {hasGps ? (
+                    <>
+                      <div>موقع السائق: {target.driverGps[0].toFixed(4)}, {target.driverGps[1].toFixed(4)}</div>
+                      <div>الوجهة المطلوبة: {target.destGps[0].toFixed(4)}, {target.destGps[1].toFixed(4)}</div>
+                    </>
+                  ) : (
+                    <div style={{ color: "#94a3b8" }}>لم يُرسل السائق إحداثيات موقعه</div>
+                  )}
                 </div>
-                {locationOk ? (
+                {locationOk === null ? (
+                  <span style={{ background: "#f1f5f9", color: "#64748b", border: "0.5px solid #cbd5e1", borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                    GPS غير متاح
+                  </span>
+                ) : locationOk ? (
                   <span style={{ background: "#dcfce7", color: "#166534", border: "0.5px solid #86efac", borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
                     الموقع مطابق ✓
                   </span>
@@ -797,7 +812,7 @@ function ApproveModal({
                   </span>
                 )}
               </div>
-              {!locationOk && (
+              {locationOk === false && (
                 <div style={{ marginTop: 10, background: "#fef2f2", border: "0.5px solid #fca5a5", borderRadius: 8, padding: "8px 10px", fontSize: 11, color: "#991b1b", fontWeight: 600 }}>
                   لا يمكن تأكيد الاستلام — الموقع خارج نطاق 200 متر من الوجهة المحددة.
                 </div>
@@ -1490,7 +1505,7 @@ export default function ProviderTasks() {
                               } else if (action === "track" && task.driver) {
                                 setTrackTarget({ label: task.tripNumber, region: task.region, quantity: task.quantityLiters, driver: task.driver, timeline: task.timeline });
                               } else if (action === "approve") {
-                                setApproveTarget({ taskId: task.id, type: "ngo", contractType: "organization", label: task.tripNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.orgName, driverGps: [31.502, 34.471], destGps: [31.501, 34.470], deliveryPhotos: task.deliveryPhotos });
+                                setApproveTarget({ taskId: task.id, type: "ngo", contractType: "organization", label: task.tripNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.orgName, driverGps: task.driverGps ?? [0, 0], destGps: task.destGps ?? [0, 0], deliveryPhotos: task.deliveryPhotos });
                               } else {
                                 setSelectedNgoTask(task);
                               }
@@ -1583,7 +1598,7 @@ export default function ProviderTasks() {
                               } else if (action === "track" && task.driver) {
                                 setTrackTarget({ label: task.orderNumber, region: task.region, quantity: task.quantityLiters, driver: task.driver, timeline: task.timeline });
                               } else if (action === "approve") {
-                                setApproveTarget({ taskId: task.id, type: "citizen", contractType: "citizen", label: task.orderNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.citizenName, driverGps: [31.502, 34.471], destGps: [31.501, 34.470], deliveryPhotos: task.deliveryPhotos });
+                                setApproveTarget({ taskId: task.id, type: "citizen", contractType: "citizen", label: task.orderNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.citizenName, driverGps: [31.502, 34.471], destGps: [31.501, 34.470], deliveryPhotos: task.deliveryPhotos }); // citizen tasks use static coords (no GPS tracking)
                               } else {
                                 setSelectedCitTask(task);
                               }
@@ -1615,8 +1630,8 @@ export default function ProviderTasks() {
               date: selectedNgoTask.date,
               driver: selectedNgoTask.driver,
               partyName: selectedNgoTask.orgName,
-              driverGps: [31.502, 34.471],
-              destGps: [31.501, 34.470],
+              driverGps: selectedNgoTask.driverGps ?? [0, 0],
+              destGps: selectedNgoTask.destGps ?? [0, 0],
               deliveryPhotos: selectedNgoTask.deliveryPhotos,
             });
           }}

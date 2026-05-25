@@ -21,7 +21,7 @@ app.use((_req, res, next) => {
   res.setHeader("Content-Security-Policy", "frame-ancestors *");
   next();
 });
-app.use(express.json());
+app.use(express.json({ limit: "8mb" }));
 
 const PgSession = connectPgSimple(session);
 const scryptAsync = promisify(scrypt);
@@ -1729,7 +1729,7 @@ app.get("/api/provider/tasks", async (req, res) => {
     const regionIds = [...new Set(contracts.map(c => c.regionId))];
 
     const zones = await db.select({
-      id: zonesTable.id, regionId: zonesTable.regionId, name: zonesTable.name,
+      id: zonesTable.id, regionId: zonesTable.regionId, name: zonesTable.name, boundary: zonesTable.boundary,
     }).from(zonesTable).where(inArray(zonesTable.regionId, regionIds));
 
     const zoneIds = zones.map(z => z.id);
@@ -1769,6 +1769,33 @@ app.get("/api/provider/tasks", async (req, res) => {
     const zoneById = new Map(zones.map(z => [z.id, z]));
     const contractByKey = new Map(contracts.map(c => [`${c.ngoId}:${c.regionId}`, c.id]));
 
+    // Load driver_tasks proof data (photo + GPS) for each provider_ngo_task
+    const pntIds = pntRows.map(r => r.id);
+    let dtProofMap = new Map<string, { proofPhotoUrl: string | null; deliveryLat: string | null; deliveryLng: string | null }>();
+    if (pntIds.length) {
+      const dtRows = await db.select({
+        providerNgoTaskId: driverTasksTable.providerNgoTaskId,
+        proofPhotoUrl: driverTasksTable.proofPhotoUrl,
+        deliveryLat: driverTasksTable.deliveryLat,
+        deliveryLng: driverTasksTable.deliveryLng,
+      }).from(driverTasksTable)
+        .where(inArray(driverTasksTable.providerNgoTaskId, pntIds));
+      dtProofMap = new Map(
+        dtRows
+          .filter(r => r.providerNgoTaskId)
+          .map(r => [r.providerNgoTaskId as string, r])
+      );
+    }
+
+    function zoneCenterFromBoundary(boundary: unknown): [number, number] {
+      if (!Array.isArray(boundary) || boundary.length === 0) return [0, 0];
+      const pts = boundary as [number, number][];
+      return [
+        pts.reduce((s, p) => s + p[0], 0) / pts.length,
+        pts.reduce((s, p) => s + p[1], 0) / pts.length,
+      ];
+    }
+
     const data = tasks.map((task, i) => {
       const zone = zoneById.get(task.zoneId);
       const regionId = zone?.regionId ?? null;
@@ -1776,6 +1803,11 @@ app.get("/api/provider/tasks", async (req, res) => {
       const contractId = regionId ? (contractByKey.get(`${task.ngoId}:${regionId}`) ?? null) : null;
       const pnt = pntMap.get(task.id);
       const driverInfo = pnt?.assignedDriverId ? driverMap.get(pnt.assignedDriverId) : null;
+      const dtProof = pnt ? dtProofMap.get(pnt.id) : null;
+      const destGps = zoneCenterFromBoundary(zone?.boundary);
+      const driverGps: [number, number] = dtProof?.deliveryLat && dtProof?.deliveryLng
+        ? [parseFloat(dtProof.deliveryLat), parseFloat(dtProof.deliveryLng)]
+        : [0, 0];
 
       let status: "pending" | "accepted" | "in_progress" | "completed" | "cancelled";
       if (task.status === "cancelled") status = "cancelled";
@@ -1800,7 +1832,9 @@ app.get("/api/provider/tasks", async (req, res) => {
         status,
         notes: task.notes,
         timeline: [],
-        deliveryPhotos: [],
+        deliveryPhotos: dtProof?.proofPhotoUrl ? [dtProof.proofPhotoUrl] : [],
+        driverGps,
+        destGps,
         parentContractId: contractId ?? "",
         deliveryApproved: false,
       };
@@ -1915,7 +1949,12 @@ app.get("/api/driver/tasks", async (req, res) => {
 
 app.patch("/api/driver/tasks/:id", async (req, res) => {
   try {
-    const { status } = req.body as { status: string };
+    const { status, proofPhotoDataUrl, lat, lng } = req.body as {
+      status: string;
+      proofPhotoDataUrl?: string;
+      lat?: number;
+      lng?: number;
+    };
     const validStatuses = ["pending", "invitation_pending", "in_progress", "delivered", "rejected"];
     if (!validStatuses.includes(status)) return res.status(400).json({ error: "Invalid status" });
 
@@ -1923,7 +1962,12 @@ app.patch("/api/driver/tasks/:id", async (req, res) => {
       .set({
         status: status as "pending" | "invitation_pending" | "in_progress" | "delivered" | "rejected",
         ...(status === "in_progress" ? { startedAt: new Date() } : {}),
-        ...(status === "delivered" ? { deliveredAt: new Date() } : {}),
+        ...(status === "delivered" ? {
+          deliveredAt: new Date(),
+          ...(proofPhotoDataUrl ? { proofPhotoUrl: proofPhotoDataUrl } : {}),
+          ...(lat != null ? { deliveryLat: String(lat) } : {}),
+          ...(lng != null ? { deliveryLng: String(lng) } : {}),
+        } : {}),
         updatedAt: new Date(),
       })
       .where(eq(driverTasksTable.id, req.params.id))
