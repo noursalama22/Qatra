@@ -470,6 +470,7 @@ export default function DriverPortal() {
                       }}
                       style={{
                         display: "flex",
+                        flexDirection: "row-reverse",
                         alignItems: "center",
                         gap: 14,
                         background: "#fff",
@@ -485,7 +486,7 @@ export default function DriverPortal() {
                         transition: "box-shadow 0.15s, border-color 0.15s",
                       }}
                     >
-                      {/* Left icon */}
+                      {/* Right icon (RTL start) */}
                       <div style={{
                         width: 44, height: 44, borderRadius: 12, flexShrink: 0,
                         background: meta.bg, border: `1px solid ${meta.border}`,
@@ -522,7 +523,7 @@ export default function DriverPortal() {
                         </div>
                       </div>
 
-                      {/* Chevron / done */}
+                      {/* Chevron on left (RTL end) */}
                       {clickable && (
                         <div style={{ color: "#0891b2", fontSize: 18, flexShrink: 0, fontWeight: 700 }}>←</div>
                       )}
