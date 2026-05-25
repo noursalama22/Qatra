@@ -11,6 +11,7 @@ import {
   citizensTable, signalsTable, gpsPositionsTable,
   userRolesTable, contractsTable, trucksTable, providerDriverInvitesTable,
   regionsTable, providerRegionRatesTable, ngoContractsTable,
+  providerNgoTasksTable, driverTasksTable,
 } from "@shared/schema";
 import { eq, count, sum, sql, desc, and, inArray } from "drizzle-orm";
 
@@ -1699,6 +1700,258 @@ app.get("/api/ngos/:ngoId/reports", async (req, res) => {
       distributionByRegion,
       supplierPerformance,
     });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// ── Provider Tasks (session-authenticated) ─────────────────────────────────
+
+app.get("/api/provider/tasks", async (req, res) => {
+  try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+    if (authUser.role !== "provider") return res.status(403).json({ error: "Forbidden" });
+
+    const providerId = typeof authUser.profile?.id === "string" ? authUser.profile.id : "";
+    if (!providerId) return res.status(400).json({ error: "Provider profile not found" });
+
+    const contracts = await db.select({
+      ngoId: ngoContractsTable.ngoId,
+      regionId: ngoContractsTable.regionId,
+      id: ngoContractsTable.id,
+    }).from(ngoContractsTable).where(and(
+      eq(ngoContractsTable.providerId, providerId),
+      inArray(ngoContractsTable.status, ["active", "pending"]),
+    ));
+
+    if (!contracts.length) return res.json({ data: [] });
+
+    const ngoIds = [...new Set(contracts.map(c => c.ngoId))];
+    const regionIds = [...new Set(contracts.map(c => c.regionId))];
+
+    const zones = await db.select({
+      id: zonesTable.id, regionId: zonesTable.regionId, name: zonesTable.name,
+    }).from(zonesTable).where(inArray(zonesTable.regionId, regionIds));
+
+    const zoneIds = zones.map(z => z.id);
+    if (!zoneIds.length) return res.json({ data: [] });
+
+    const tasks = await db.select().from(distributionTasksTable)
+      .where(and(
+        inArray(distributionTasksTable.zoneId, zoneIds),
+        inArray(distributionTasksTable.ngoId, ngoIds),
+      ))
+      .orderBy(desc(distributionTasksTable.scheduledAt));
+
+    if (!tasks.length) return res.json({ data: [] });
+
+    const pntRows = await db.select().from(providerNgoTasksTable)
+      .where(eq(providerNgoTasksTable.providerId, providerId));
+    const pntMap = new Map(pntRows.map(r => [r.distributionTaskId, r]));
+
+    const assignedDriverIds = pntRows.map(r => r.assignedDriverId).filter((id): id is string => !!id);
+    let driverMap = new Map<string, { fullName: string | null; plateNumber: string | null; zone: string | null }>();
+    if (assignedDriverIds.length) {
+      const dRows = await db.select({
+        id: driversTable.id, fullName: driversTable.fullName,
+        plateNumber: driversTable.plateNumber, zone: driversTable.zone,
+      }).from(driversTable).where(inArray(driversTable.id, assignedDriverIds));
+      driverMap = new Map(dRows.map(d => [d.id, d]));
+    }
+
+    const ngoRows = await db.select({ id: ngosTable.id, orgName: ngosTable.orgName })
+      .from(ngosTable).where(inArray(ngosTable.id, ngoIds));
+    const ngoNames = new Map(ngoRows.map(n => [n.id, n.orgName]));
+
+    const regionRows = await db.select({ id: regionsTable.id, name: regionsTable.name })
+      .from(regionsTable).where(inArray(regionsTable.id, regionIds));
+    const regionNames = new Map(regionRows.map(r => [r.id, r.name]));
+
+    const zoneById = new Map(zones.map(z => [z.id, z]));
+    const contractByKey = new Map(contracts.map(c => [`${c.ngoId}:${c.regionId}`, c.id]));
+
+    const data = tasks.map((task, i) => {
+      const zone = zoneById.get(task.zoneId);
+      const regionId = zone?.regionId ?? null;
+      const regionName = regionId ? (regionNames.get(regionId) ?? "غير محدد") : "غير محدد";
+      const contractId = regionId ? (contractByKey.get(`${task.ngoId}:${regionId}`) ?? null) : null;
+      const pnt = pntMap.get(task.id);
+      const driverInfo = pnt?.assignedDriverId ? driverMap.get(pnt.assignedDriverId) : null;
+
+      let status: "pending" | "accepted" | "in_progress" | "completed" | "cancelled";
+      if (task.status === "cancelled") status = "cancelled";
+      else if (task.status === "delivered") status = "completed";
+      else if (task.status === "in_progress") status = "in_progress";
+      else if (pnt?.assignedDriverId) status = "accepted";
+      else status = "pending";
+
+      return {
+        id: task.id,
+        tripNumber: `TRP-${String(i + 1).padStart(4, "0")}`,
+        contractNumber: contractId ?? "—",
+        orgName: ngoNames.get(task.ngoId) ?? "منظمة",
+        region: regionName,
+        date: task.scheduledAt.toISOString().split("T")[0],
+        quantityLiters: Number(task.quantityLiters),
+        driver: driverInfo ? {
+          name: driverInfo.fullName ?? "سائق",
+          plate: driverInfo.plateNumber ?? "—",
+          region: driverInfo.zone ?? regionName,
+        } : null,
+        status,
+        notes: task.notes,
+        timeline: [],
+        deliveryPhotos: [],
+        parentContractId: contractId ?? "",
+        deliveryApproved: false,
+      };
+    });
+
+    res.json({ data });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post("/api/provider/tasks/:taskId/assign-driver", async (req, res) => {
+  try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+    if (authUser.role !== "provider") return res.status(403).json({ error: "Forbidden" });
+
+    const providerId = typeof authUser.profile?.id === "string" ? authUser.profile.id : "";
+    if (!providerId) return res.status(400).json({ error: "Provider profile not found" });
+
+    const { taskId } = req.params;
+    const driverId = clean(req.body.driverId);
+    if (!driverId) return res.status(400).json({ error: "driverId required" });
+
+    const [distTask] = await db.select().from(distributionTasksTable)
+      .where(eq(distributionTasksTable.id, taskId));
+    if (!distTask) return res.status(404).json({ error: "Task not found" });
+
+    const [existing] = await db.select().from(providerNgoTasksTable)
+      .where(and(
+        eq(providerNgoTasksTable.distributionTaskId, taskId),
+        eq(providerNgoTasksTable.providerId, providerId),
+      ));
+
+    let pntId: string;
+    if (existing) {
+      const [updated] = await db.update(providerNgoTasksTable)
+        .set({ assignedDriverId: driverId, status: "acknowledged", updatedAt: new Date() })
+        .where(eq(providerNgoTasksTable.id, existing.id))
+        .returning();
+      pntId = updated.id;
+    } else {
+      const [created] = await db.insert(providerNgoTasksTable)
+        .values({ distributionTaskId: taskId, providerId, assignedDriverId: driverId, status: "acknowledged" })
+        .returning();
+      pntId = created.id;
+    }
+
+    const [existingDt] = await db.select().from(driverTasksTable)
+      .where(eq(driverTasksTable.providerNgoTaskId, pntId));
+
+    if (existingDt) {
+      await db.update(driverTasksTable)
+        .set({ driverId, updatedAt: new Date() })
+        .where(eq(driverTasksTable.id, existingDt.id));
+    } else {
+      await db.insert(driverTasksTable).values({
+        driverId,
+        providerNgoTaskId: pntId,
+        taskType: "humanitarian",
+        status: "pending",
+        zoneId: distTask.zoneId,
+        providerId,
+        scheduledAt: distTask.scheduledAt,
+        quantityLiters: distTask.quantityLiters,
+      });
+    }
+
+    if (distTask.status === "pending") {
+      await db.update(distributionTasksTable)
+        .set({ status: "in_progress", updatedAt: new Date() })
+        .where(eq(distributionTasksTable.id, taskId));
+    }
+
+    res.json({ success: true, providerNgoTaskId: pntId });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// ── Driver Tasks (session-authenticated) ───────────────────────────────────
+
+app.get("/api/driver/tasks", async (req, res) => {
+  try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+    if (authUser.role !== "driver") return res.status(403).json({ error: "Forbidden" });
+
+    const driverId = typeof authUser.profile?.id === "string" ? authUser.profile.id : "";
+    if (!driverId) return res.status(400).json({ error: "Driver profile not found" });
+
+    const driverTaskRows = await db.select().from(driverTasksTable)
+      .where(eq(driverTasksTable.driverId, driverId))
+      .orderBy(desc(driverTasksTable.scheduledAt));
+
+    const zoneIds = [...new Set(driverTaskRows.map(t => t.zoneId).filter((id): id is string => !!id))];
+    const zoneData = zoneIds.length
+      ? await db.select({
+          id: zonesTable.id, name: zonesTable.name,
+          populationEstimate: zonesTable.populationEstimate, boundary: zonesTable.boundary,
+        }).from(zonesTable).where(inArray(zonesTable.id, zoneIds))
+      : [];
+
+    const data = driverTaskRows.map(task => ({
+      id: task.id,
+      zoneId: task.zoneId ?? "",
+      status: task.status,
+      quantityLiters: String(task.quantityLiters ?? 0),
+      scheduledAt: task.scheduledAt?.toISOString() ?? new Date().toISOString(),
+      notes: null,
+    }));
+
+    res.json({ data, zones: zoneData });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.patch("/api/driver/tasks/:id", async (req, res) => {
+  try {
+    const { status } = req.body as { status: string };
+    const validStatuses = ["pending", "invitation_pending", "in_progress", "delivered", "rejected"];
+    if (!validStatuses.includes(status)) return res.status(400).json({ error: "Invalid status" });
+
+    const [updated] = await db.update(driverTasksTable)
+      .set({
+        status: status as "pending" | "invitation_pending" | "in_progress" | "delivered" | "rejected",
+        ...(status === "in_progress" ? { startedAt: new Date() } : {}),
+        ...(status === "delivered" ? { deliveredAt: new Date() } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(driverTasksTable.id, req.params.id))
+      .returning();
+
+    if (!updated) return res.status(404).json({ error: "Not found" });
+
+    if (status === "delivered" && updated.providerNgoTaskId) {
+      await db.update(providerNgoTasksTable)
+        .set({ status: "delivered", updatedAt: new Date() })
+        .where(eq(providerNgoTasksTable.id, updated.providerNgoTaskId));
+
+      const [pnt] = await db.select({ distributionTaskId: providerNgoTasksTable.distributionTaskId })
+        .from(providerNgoTasksTable).where(eq(providerNgoTasksTable.id, updated.providerNgoTaskId));
+      if (pnt) {
+        await db.update(distributionTasksTable)
+          .set({ status: "delivered", updatedAt: new Date() })
+          .where(eq(distributionTasksTable.id, pnt.distributionTaskId));
+        const [dt] = await db.select({ zoneId: distributionTasksTable.zoneId })
+          .from(distributionTasksTable).where(eq(distributionTasksTable.id, pnt.distributionTaskId));
+        if (dt?.zoneId) {
+          await db.update(zonesTable).set({ lastDeliveryAt: new Date(), updatedAt: new Date() })
+            .where(eq(zonesTable.id, dt.zoneId));
+        }
+      }
+    }
+
+    res.json(updated);
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 

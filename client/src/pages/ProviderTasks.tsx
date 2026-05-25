@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useAppContext } from "../components/RequireRole";
 
 type TaskStatus = "pending" | "accepted" | "in_progress" | "completed" | "cancelled";
 
@@ -175,13 +176,6 @@ type DriverOption = {
   status: "active";
 };
 
-const ACTIVE_DRIVERS: DriverOption[] = [
-  { id: "d1", name: "يوسف البطران",  plate: "GZ-4821", capacityLiters: 5000,  region: "شمال غزة",  vehicleType: "خزان مياه",    status: "active" },
-  { id: "d2", name: "نادر أبو عوض",  plate: "GZ-7711", capacityLiters: 1000,  region: "مدينة غزة", vehicleType: "بيكب",          status: "active" },
-  { id: "d3", name: "محمد الشريف",   plate: "GZ-3305", capacityLiters: 3000,  region: "الوسطى",    vehicleType: "صهريج متوسط",   status: "active" },
-  { id: "d4", name: "حسام العمل",    plate: "GZ-9102", capacityLiters: 8000,  region: "خان يونس",  vehicleType: "صهريج كبير",    status: "active" },
-  { id: "d5", name: "خالد الغول",    plate: "GZ-6640", capacityLiters: 2000,  region: "رفح",       vehicleType: "خزان مياه",    status: "active" },
-];
 
 const REGION_COORDS: Record<string, { lat: number; lng: number; eta: string; km: string }> = {
   "شمال غزة": { lat: 31.547, lng: 34.471, eta: "١٢ دقيقة", km: "٦.٢ كم" },
@@ -925,10 +919,12 @@ function AssignDriverModal({
   target,
   onClose,
   onConfirm,
+  drivers,
 }: {
   target: AssignTarget;
   onClose: () => void;
   onConfirm: (driver: DriverOption) => void;
+  drivers: DriverOption[];
 }) {
   const [step, setStep] = useState<"select" | "confirm">("select");
   const [selected, setSelected] = useState<DriverOption | null>(null);
@@ -975,7 +971,7 @@ function AssignDriverModal({
                   : "اختر أحد السائقين النشطين أدناه لتعيينه على هذه المهمة."}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {ACTIVE_DRIVERS.map(driver => {
+                {drivers.map(driver => {
                   const isSelected = selected?.id === driver.id;
                   const isCurrent = target.isReassign && target.currentDriverName === driver.name;
                   return (
@@ -1193,7 +1189,14 @@ function FilterBar({
 }
 
 export default function ProviderTasks() {
+  const { user } = useAppContext();
+  const providerId = typeof (user.profile as Record<string, unknown> | null)?.id === "string"
+    ? (user.profile as Record<string, unknown>).id as string
+    : "";
+
   const [tab, setTab] = useState<"ngo" | "citizen">("ngo");
+  const [loadingTasks, setLoadingTasks] = useState(true);
+  const [activeDrivers, setActiveDrivers] = useState<DriverOption[]>([]);
 
   const [ngoStatus, setNgoStatus] = useState("all");
   const [ngoRegion, setNgoRegion] = useState("all");
@@ -1201,7 +1204,7 @@ export default function ProviderTasks() {
   const [ngoDateTo, setNgoDateTo] = useState("");
   const [ngoSearch, setNgoSearch] = useState("");
   const [selectedNgoTask, setSelectedNgoTask] = useState<NgoTask | null>(null);
-  const [ngoTasks, setNgoTasks] = useState<NgoTask[]>(NGO_TASKS_MOCK);
+  const [ngoTasks, setNgoTasks] = useState<NgoTask[]>([]);
 
   const [citStatus, setCitStatus] = useState("all");
   const [citRegion, setCitRegion] = useState("all");
@@ -1219,6 +1222,36 @@ export default function ProviderTasks() {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3500);
   };
+
+  const loadTasks = useCallback(async () => {
+    if (!providerId) return;
+    setLoadingTasks(true);
+    try {
+      const [tasksRes, driversRes] = await Promise.all([
+        fetch("/api/provider/tasks").then(r => r.json()),
+        fetch(`/api/provider-drivers?providerId=${providerId}`).then(r => r.json()),
+      ]);
+      setNgoTasks(tasksRes.data ?? []);
+      const mapped: DriverOption[] = (driversRes.data ?? [])
+        .filter((d: Record<string, unknown>) => d.status === "active")
+        .map((d: Record<string, unknown>) => ({
+          id: String(d.id ?? ""),
+          name: String(d.fullName ?? "سائق"),
+          plate: String(d.plateNumber ?? "—"),
+          capacityLiters: Number(d.capacityLiters ?? 0),
+          region: String(d.zone ?? "غير محدد"),
+          vehicleType: String(d.vehicleModel ?? d.vehicleType ?? "مركبة"),
+          status: "active" as const,
+        }));
+      setActiveDrivers(mapped);
+    } finally {
+      setLoadingTasks(false);
+    }
+  }, [providerId]);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
 
   const filteredNgo = ngoTasks.filter(t => {
     if (ngoStatus !== "all" && t.status !== ngoStatus) return false;
@@ -1265,18 +1298,30 @@ export default function ProviderTasks() {
 
   const nowLabel = () => new Date().toLocaleString("ar-AE", { dateStyle: "short", timeStyle: "short" });
 
-  const handleAssignConfirm = (driver: DriverOption) => {
+  const handleAssignConfirm = async (driver: DriverOption) => {
     if (!assignTarget) return;
     const driverData = { name: driver.name, plate: driver.plate, region: driver.region };
     const timeEntry = assignTarget.isReassign
       ? { label: `إعادة تعيين السائق — السابق: ${assignTarget.currentDriverName ?? "—"}`, date: nowLabel() }
       : { label: "تعيين السائق", date: nowLabel() };
+
     if (assignTarget.type === "ngo") {
-      setNgoTasks(prev => prev.map(t =>
-        t.id === assignTarget.taskId
-          ? { ...t, status: assignTarget.isReassign ? t.status : "accepted" as const, driver: driverData, timeline: [...t.timeline, timeEntry] }
-          : t
-      ));
+      try {
+        const res = await fetch(`/api/provider/tasks/${assignTarget.taskId}/assign-driver`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ driverId: driver.id }),
+        });
+        if (!res.ok) throw new Error();
+        setNgoTasks(prev => prev.map(t =>
+          t.id === assignTarget.taskId
+            ? { ...t, status: "accepted" as const, driver: driverData, timeline: [...t.timeline, timeEntry] }
+            : t
+        ));
+        showToast("تم تعيين السائق بنجاح", true);
+      } catch {
+        showToast("حدث خطأ أثناء تعيين السائق", false);
+      }
     } else {
       setCitTasks(prev => prev.map(t =>
         t.id === assignTarget.taskId
@@ -1399,7 +1444,13 @@ export default function ProviderTasks() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredNgo.length === 0 ? (
+                  {loadingTasks ? (
+                    <tr>
+                      <td colSpan={8} style={{ padding: "48px 24px", textAlign: "center", color: "#8eb5c8" }}>
+                        <div style={{ fontSize: 14, fontWeight: 600 }}>جارٍ تحميل المهام…</div>
+                      </td>
+                    </tr>
+                  ) : filteredNgo.length === 0 ? (
                     <tr>
                       <td colSpan={8} style={{ padding: "48px 24px", textAlign: "center", color: "#8eb5c8" }}>
                         <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
@@ -1585,6 +1636,7 @@ export default function ProviderTasks() {
           target={assignTarget}
           onClose={() => setAssignTarget(null)}
           onConfirm={handleAssignConfirm}
+          drivers={activeDrivers}
         />
       )}
 

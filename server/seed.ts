@@ -3,6 +3,7 @@ import {
   usersTable, ngosTable, providersTable, driversTable, zonesTable,
   distributionTasksTable, deliveryOrdersTable, citizensTable, gpsPositionsTable,
   userRolesTable, regionsTable, providerRegionRatesTable, ngoContractsTable,
+  providerNgoTasksTable, driverTasksTable,
 } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { scryptSync, randomBytes } from "node:crypto";
@@ -155,9 +156,12 @@ async function seed() {
   }
 
   await db.insert(driversTable).values([
-    { id: "seed-d1", userId: "seed-u5", driverType: "owned",       providerId: "seed-p1", status: "active", phone: "+970-599-123-456", vehicleType: "خزان مياه 5000 لتر" },
-    { id: "seed-d2", userId: "seed-u6", driverType: "independent", providerId: null,       status: "active", phone: "+970-598-987-654", vehicleType: "بيكب 1000 لتر"      },
+    { id: "seed-d1", userId: "seed-u5", driverType: "owned",       providerId: "seed-p1", status: "active", phone: "+970-599-123-456", vehicleType: "خزان مياه", vehicleCapacityLiters: 5000, fullName: "يوسف البطران", plateNumber: "GZ-4821", zone: "مدينة غزة" },
+    { id: "seed-d2", userId: "seed-u6", driverType: "independent", providerId: null,       status: "active", phone: "+970-598-987-654", vehicleType: "بيكب",       vehicleCapacityLiters: 1000, fullName: "نادر أبو عوض",  plateNumber: "GZ-7711", zone: "خان يونس" },
   ]).onConflictDoNothing();
+
+  await db.update(driversTable).set({ fullName: "يوسف البطران", plateNumber: "GZ-4821", vehicleCapacityLiters: 5000, vehicleType: "خزان مياه", zone: "مدينة غزة" }).where(eq(driversTable.id, "seed-d1"));
+  await db.update(driversTable).set({ fullName: "نادر أبو عوض",  plateNumber: "GZ-7711", vehicleCapacityLiters: 1000, vehicleType: "بيكب",       zone: "خان يونس" }).where(eq(driversTable.id, "seed-d2"));
 
   await db.insert(citizensTable).values([
     { id: "seed-c1", userId: "seed-u7", zoneId: "seed-z1" },
@@ -251,6 +255,33 @@ async function seed() {
     { id: "demo-t30", ngoId: "seed-n2", zoneId: "seed-z13", status: "delivered", quantityLiters: "23000", scheduledAt: daysAgo(26, 10), notes: "الزيتون" },
   ];
   await db.insert(distributionTasksTable).values(demoTaskRows);
+
+  // ── Provider NGO Tasks & Driver Tasks (demo linkage) ─────────────────────
+  await db.delete(driverTasksTable).where(sql`${driverTasksTable.id} LIKE 'seed-dt%'`);
+  await db.delete(providerNgoTasksTable).where(sql`${providerNgoTasksTable.id} LIKE 'seed-pnt%'`);
+
+  await db.insert(providerNgoTasksTable).values([
+    { id: "seed-pnt1", distributionTaskId: "seed-t1", providerId: "seed-p1", assignedDriverId: "seed-d1", status: "in_progress" },
+    { id: "seed-pnt2", distributionTaskId: "seed-t4", providerId: "seed-p1", assignedDriverId: "seed-d1", status: "delivered"   },
+    { id: "seed-pnt3", distributionTaskId: "seed-t5", providerId: "seed-p1", assignedDriverId: null,       status: "pending"     },
+  ]).onConflictDoNothing();
+
+  await db.insert(driverTasksTable).values([
+    {
+      id: "seed-dt1", driverId: "seed-d1", providerNgoTaskId: "seed-pnt1",
+      taskType: "humanitarian", status: "in_progress",
+      zoneId: "seed-z2", providerId: "seed-p1",
+      scheduledAt: new Date("2026-05-23T06:00:00Z"), quantityLiters: "50000",
+      startedAt: new Date("2026-05-23T07:30:00Z"),
+    },
+    {
+      id: "seed-dt2", driverId: "seed-d1", providerNgoTaskId: "seed-pnt2",
+      taskType: "humanitarian", status: "delivered",
+      zoneId: "seed-z3", providerId: "seed-p1",
+      scheduledAt: new Date("2026-05-22T10:00:00Z"), quantityLiters: "20000",
+      startedAt: new Date("2026-05-22T10:30:00Z"), deliveredAt: new Date("2026-05-22T13:00:00Z"),
+    },
+  ]).onConflictDoNothing();
 
   await db.insert(gpsPositionsTable).values([
     { id: "seed-g1", driverId: "seed-d1", lat: "31.496", lng: "34.462", accuracy: "5.2", recordedAt: new Date(Date.now() - 4 * 60000) },

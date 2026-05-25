@@ -85,12 +85,14 @@ export default function DriverPortal() {
   };
 
   const loadTasks = useCallback(async () => {
-    const [t, z] = await Promise.all([
-      fetch("/api/tasks").then(r => r.json()),
-      fetch("/api/zones").then(r => r.json()),
-    ]);
-    setTasks(t.data ?? []);
-    setZones(z.data ?? []);
+    const r = await fetch("/api/driver/tasks").then(r => r.json());
+    setTasks(r.data ?? []);
+    if (Array.isArray(r.zones) && r.zones.length) {
+      setZones(r.zones);
+    } else {
+      const z = await fetch("/api/zones").then(r => r.json());
+      setZones(z.data ?? []);
+    }
   }, []);
 
   const loadOfflineCount = useCallback(() => {
@@ -104,7 +106,7 @@ export default function DriverPortal() {
     const synced: string[] = [];
     for (const item of queue) {
       try {
-        await fetch(`/api/tasks/${item.taskId}`, {
+        await fetch(`/api/driver/tasks/${item.taskId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: "delivered" }),
@@ -223,7 +225,7 @@ export default function DriverPortal() {
 
   async function startRoute() {
     if (!activeTask) return;
-    await fetch(`/api/tasks/${activeTask.id}`, {
+    await fetch(`/api/driver/tasks/${activeTask.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "in_progress" }),
     });
@@ -247,7 +249,7 @@ export default function DriverPortal() {
     setCompleting(true);
     try {
       if (navigator.onLine) {
-        await fetch(`/api/tasks/${activeTask.id}`, {
+        await fetch(`/api/driver/tasks/${activeTask.id}`, {
           method: "PATCH", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: "delivered" }),
         });
