@@ -7,10 +7,6 @@ export default function DriverBottomNav() {
         <span aria-hidden>📋</span>
         <span>مهامي</span>
       </NavLink>
-      <NavLink to="/driver/map" className={({ isActive }) => `dpwa-nav-item${isActive ? " dpwa-nav-active" : ""}`}>
-        <span aria-hidden>🗺️</span>
-        <span>الخريطة</span>
-      </NavLink>
     </nav>
   );
 }

@@ -329,7 +329,6 @@ function AuthenticatedApp({
 
           <Route element={<RequireRole role="driver" />}>
             <Route path="/driver" element={<DriverPortal />} />
-            <Route path="/driver/map" element={<MapView />} />
           </Route>
         </Route>
 

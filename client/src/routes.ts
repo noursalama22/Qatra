@@ -35,7 +35,6 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
   ],
   driver: [
     { path: "/driver", label: "مهامي", end: true },
-    { path: "/driver/map", label: "خريطة الطريق" },
   ],
   citizen: [
     { path: "/citizen", label: "الرئيسية", end: true },
@@ -98,7 +97,6 @@ export function isMapRoute(pathname: string): boolean {
 
 export function pageLabel(pathname: string, role: Role): string {
   if (pathname.endsWith("/map")) {
-    if (role === "driver") return "خريطة الطريق";
     return "الخريطة الحية";
   }
   for (const group of NGO_NAV_GROUPS) {
