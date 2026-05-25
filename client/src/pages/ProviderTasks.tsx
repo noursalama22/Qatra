@@ -1410,7 +1410,7 @@ export default function ProviderTasks() {
   return (
     <div className="page" style={{ padding: "28px" }}>
       <div style={{ display: "flex", borderBottom: "1px solid #d8eef8", marginBottom: 24 }}>
-        {([["ngo", "مهام المنظمات"], ["citizen", "مهام المواطنين"]] as const).map(([id, label]) => (
+        {([["ngo", "مهام المنظمات"], ["citizen", "طلبات المواطنين"]] as const).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
