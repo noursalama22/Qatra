@@ -364,8 +364,66 @@ export default function DriverPortal() {
             </div>
           </div>
 
-          {inProgressTask && (
-            <button className="dpwa-resume-card" onClick={() => { setActiveTask(inProgressTask); activeTaskRef.current = inProgressTask; setStage("navigate"); startGps(); }}>
+          {/* ── Filter tabs ── */}
+          {(() => {
+            const filters: { key: "all" | "pending" | "in_progress" | "delivered"; label: string; icon: string; count: number }[] = [
+              { key: "all",         label: "الكل",     icon: "☰",  count: tasks.length },
+              { key: "pending",     label: "معلقة",    icon: "⏳", count: tasks.filter(t => t.status === "pending").length },
+              { key: "in_progress", label: "جارية",    icon: "🚛", count: tasks.filter(t => t.status === "in_progress").length },
+              { key: "delivered",   label: "مُسلَّمة", icon: "✅", count: tasks.filter(t => t.status === "delivered").length },
+            ];
+            return (
+              <div style={{ display: "flex", gap: 6, padding: "4px 16px 14px", overflowX: "auto", scrollbarWidth: "none" }}>
+                {filters.map(f => {
+                  const active = taskFilter === f.key;
+                  return (
+                    <button
+                      key={f.key}
+                      onClick={() => setTaskFilter(f.key)}
+                      style={{
+                        flexShrink: 0,
+                        padding: "7px 14px",
+                        borderRadius: 22,
+                        border: active ? "none" : "1.5px solid #e0f2fe",
+                        background: active ? "linear-gradient(135deg,#0891b2,#0369a1)" : "#fff",
+                        color: active ? "#fff" : "#0369a1",
+                        fontWeight: 700,
+                        fontSize: 13,
+                        fontFamily: "inherit",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                        boxShadow: active ? "0 2px 8px rgba(8,145,178,0.35)" : "0 1px 3px rgba(0,0,0,0.06)",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      <span style={{ fontSize: 13 }}>{f.icon}</span>
+                      {f.label}
+                      <span style={{
+                        background: active ? "rgba(255,255,255,0.22)" : "#e0f2fe",
+                        color: active ? "#fff" : "#0369a1",
+                        borderRadius: 12,
+                        padding: "1px 7px",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        minWidth: 18,
+                        textAlign: "center",
+                      }}>{f.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* ── In-progress resume card ── */}
+          {inProgressTask && (taskFilter === "all" || taskFilter === "in_progress") && (
+            <button
+              className="dpwa-resume-card"
+              style={{ margin: "0 16px 12px", borderRadius: 14, overflow: "hidden" }}
+              onClick={() => { setActiveTask(inProgressTask); activeTaskRef.current = inProgressTask; setStage("navigate"); startGps(); }}
+            >
               <div className="dpwa-resume-pulse-ring" />
               <div className="dpwa-resume-info">
                 <div className="dpwa-resume-title">⚡ مهمة جارية — اضغط للاستكمال</div>
@@ -377,66 +435,19 @@ export default function DriverPortal() {
             </button>
           )}
 
-          {/* Filter tabs */}
+          {/* ── Task list ── */}
           {(() => {
-            const filters: { key: "all" | "pending" | "in_progress" | "delivered"; label: string; count: number }[] = [
-              { key: "all",         label: "الكل",     count: tasks.length },
-              { key: "pending",     label: "معلقة",    count: tasks.filter(t => t.status === "pending").length },
-              { key: "in_progress", label: "جارية",    count: tasks.filter(t => t.status === "in_progress").length },
-              { key: "delivered",   label: "مُسلَّمة", count: tasks.filter(t => t.status === "delivered").length },
-            ];
-            return (
-              <div style={{ display: "flex", gap: 8, padding: "0 16px 12px", overflowX: "auto" }}>
-                {filters.map(f => (
-                  <button
-                    key={f.key}
-                    onClick={() => setTaskFilter(f.key)}
-                    style={{
-                      flexShrink: 0,
-                      padding: "6px 14px",
-                      borderRadius: 20,
-                      border: taskFilter === f.key ? "none" : "1px solid #d8eef8",
-                      background: taskFilter === f.key ? "#0891b2" : "#f0f9ff",
-                      color: taskFilter === f.key ? "#fff" : "#0369a1",
-                      fontWeight: 700,
-                      fontSize: 13,
-                      fontFamily: "inherit",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    {f.label}
-                    <span style={{
-                      background: taskFilter === f.key ? "rgba(255,255,255,0.25)" : "#bae6fd",
-                      color: taskFilter === f.key ? "#fff" : "#0369a1",
-                      borderRadius: 10,
-                      padding: "1px 7px",
-                      fontSize: 11,
-                      fontWeight: 800,
-                    }}>{f.count}</span>
-                  </button>
-                ))}
-              </div>
-            );
-          })()}
-
-          {/* Task list */}
-          {(() => {
-            const filtered = tasks.filter(t =>
-              taskFilter === "all" ? true : t.status === taskFilter
-            );
-            const STATUS_META: Record<string, { label: string; dot: string }> = {
-              pending:     { label: "معلقة",    dot: "#f59e0b" },
-              in_progress: { label: "جارية",    dot: "#0891b2" },
-              delivered:   { label: "مُسلَّمة", dot: "#16a34a" },
-              rejected:    { label: "مرفوضة",   dot: "#dc2626" },
+            const filtered = tasks.filter(t => taskFilter === "all" ? true : t.status === taskFilter);
+            const STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
+              pending:     { label: "معلقة",    color: "#b45309", bg: "#fffbeb", border: "#fde68a" },
+              in_progress: { label: "جارية",    color: "#0369a1", bg: "#e0f2fe", border: "#bae6fd" },
+              delivered:   { label: "مُسلَّمة", color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" },
+              rejected:    { label: "مرفوضة",   color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
             };
             return (
-              <div className="dpwa-list-tasks">
+              <div className="dpwa-list-tasks" style={{ padding: "0 16px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
                 {filtered.length === 0 && (
-                  <div className="dpwa-empty-state">
+                  <div className="dpwa-empty-state" style={{ margin: "24px 0" }}>
                     <div className="dpwa-empty-icon">🚛</div>
                     <div className="dpwa-empty-title">لا توجد مهام</div>
                     <div className="dpwa-empty-sub">لا توجد مهام بهذه الحالة حالياً</div>
@@ -444,34 +455,77 @@ export default function DriverPortal() {
                 )}
                 {filtered.map(task => {
                   const z = zones.find(zn => zn.id === task.zoneId);
-                  const meta = STATUS_META[task.status] ?? { label: task.status, dot: "#94a3b8" };
+                  const meta = STATUS_META[task.status] ?? { label: task.status, color: "#64748b", bg: "#f8fafc", border: "#e2e8f0" };
                   const isDelivered = task.status === "delivered";
                   const isInProgress = task.status === "in_progress";
+                  const isPending = task.status === "pending";
+                  const clickable = isPending || isInProgress;
                   return (
                     <button
                       key={task.id}
-                      className="dpwa-task-card"
-                      style={isDelivered ? { opacity: 0.7 } : undefined}
+                      disabled={!clickable}
                       onClick={() => {
-                        if (task.status === "pending") acceptTask(task);
+                        if (isPending) acceptTask(task);
                         else if (isInProgress) { setActiveTask(task); activeTaskRef.current = task; setStage("navigate"); startGps(); }
                       }}
-                      disabled={isDelivered}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 14,
+                        background: "#fff",
+                        border: `1.5px solid ${clickable ? "#e0f2fe" : "#f1f5f9"}`,
+                        borderRadius: 14,
+                        padding: "14px 16px",
+                        textAlign: "right",
+                        cursor: clickable ? "pointer" : "default",
+                        opacity: isDelivered ? 0.75 : 1,
+                        boxShadow: clickable ? "0 1px 6px rgba(8,145,178,0.08)" : "none",
+                        fontFamily: "inherit",
+                        width: "100%",
+                        transition: "box-shadow 0.15s, border-color 0.15s",
+                      }}
                     >
-                      <div className="dpwa-task-notif-dot" style={{ background: meta.dot }} />
-                      <div className="dpwa-task-info">
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span className="dpwa-task-zone">{z?.name ?? task.zoneId}</span>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: meta.dot, background: `${meta.dot}18`, borderRadius: 10, padding: "2px 8px" }}>{meta.label}</span>
+                      {/* Left icon */}
+                      <div style={{
+                        width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                        background: meta.bg, border: `1px solid ${meta.border}`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 20,
+                      }}>
+                        {isDelivered ? "✅" : isInProgress ? "🚛" : "📦"}
+                      </div>
+
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {z?.name ?? task.zoneId}
+                          </span>
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, color: meta.color,
+                            background: meta.bg, border: `1px solid ${meta.border}`,
+                            borderRadius: 10, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
+                          }}>{meta.label}</span>
                         </div>
-                        <div className="dpwa-task-meta">
-                          <span>🚰 {Number(task.quantityLiters).toLocaleString()} لتر</span>
-                          <span>📅 {new Date(task.scheduledAt).toLocaleDateString("ar-SY", { weekday: "short", month: "short", day: "numeric" })}</span>
-                          {z && <span>👥 {(z.populationEstimate ?? 0).toLocaleString()}</span>}
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>
+                            🚰 {Number(task.quantityLiters).toLocaleString()} لتر
+                          </span>
+                          <span style={{ fontSize: 11, color: "#64748b" }}>
+                            📅 {new Date(task.scheduledAt).toLocaleDateString("ar-SY", { weekday: "short", month: "short", day: "numeric" })}
+                          </span>
+                          {z?.populationEstimate ? (
+                            <span style={{ fontSize: 11, color: "#64748b" }}>
+                              👥 {z.populationEstimate.toLocaleString()}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
-                      {!isDelivered && <div className="dpwa-task-chevron">←</div>}
-                      {isDelivered && <div style={{ fontSize: 18 }}>✅</div>}
+
+                      {/* Chevron / done */}
+                      {clickable && (
+                        <div style={{ color: "#0891b2", fontSize: 18, flexShrink: 0, fontWeight: 700 }}>←</div>
+                      )}
                     </button>
                   );
                 })}
