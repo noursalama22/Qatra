@@ -7,6 +7,6 @@ export const TASK_STATUS_UI: Record<string, { label: string; cls: string }> = {
 
 export function parseProviderFromNotes(notes: string | null): string | null {
   if (!notes) return null;
-  const m = notes.match(/مزود:\s*(.+)/);
+  const m = notes.match(/مزود:\s*([^|\n]+)/);
   return m?.[1]?.trim() ?? null;
 }

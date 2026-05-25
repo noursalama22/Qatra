@@ -154,7 +154,7 @@ function InviteDriverModal({ onClose, onSent }: { onClose: () => void; onSent: (
         <div style={{ display: "flex", gap: 10 }}>
           <button type="button" onClick={onClose} style={{ flex: 1, padding: "11px 0", borderRadius: 10, background: "white", color: "#6b8aa0", border: "1px solid #d8eef8", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>إلغاء</button>
           <button type="submit" disabled={saving} style={{ flex: 2, padding: "11px 0", borderRadius: 10, background: "linear-gradient(135deg,#0284c7,#0ea5e9)", color: "white", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.7 : 1 }}>
-            {saving ? "جارٍ الإرسال..." : "إرسال الدعوة 📤"}
+            {saving ? "جارٍ الإرسال..." : "إرسال الدعوة"}
           </button>
         </div>
       </form>
@@ -171,7 +171,6 @@ function InviteSuccessModal({ result, onClose }: { result: InviteResult; onClose
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 210, backdropFilter: "blur(3px)" }} onClick={onClose}>
       <div style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 440, padding: "32px 28px", display: "flex", flexDirection: "column", gap: 16, textAlign: "center" }} onClick={e => e.stopPropagation()}>
-        <div style={{ width: 60, height: 60, borderRadius: "50%", background: "linear-gradient(135deg, #0284c7, #0ea5e9)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", fontSize: 26 }}>✅</div>
         <div>
           <h3 style={{ fontSize: 18, fontWeight: 800, color: "#12384f", margin: "0 0 4px" }}>تم إرسال الدعوة بنجاح!</h3>
           <p style={{ fontSize: 13, color: "#6b8aa0", margin: 0 }}>
@@ -183,7 +182,7 @@ function InviteSuccessModal({ result, onClose }: { result: InviteResult; onClose
           <div style={{ fontSize: 10, color: "#0284c7", fontWeight: 700, marginBottom: 6, textAlign: "right" }}>رابط قبول الدعوة</div>
           <div style={{ fontSize: 11, color: "#12384f", wordBreak: "break-all", direction: "ltr", textAlign: "left", lineHeight: 1.5, marginBottom: 10, background: "white", padding: "8px 10px", borderRadius: 7, border: "1px solid #d8eef8" }}>{result.inviteLink}</div>
           <button onClick={copy} style={{ width: "100%", padding: "8px 0", borderRadius: 8, background: copied ? "#ecfeff" : "#0ea5e9", color: copied ? "#0891b2" : "white", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-            {copied ? "✅ تم النسخ!" : "📋 نسخ الرابط"}
+            {copied ? "تم النسخ" : "نسخ الرابط"}
           </button>
         </div>
         <p style={{ fontSize: 12, color: "#8eb5c8", margin: 0 }}>سيقوم السائق بإدخال بيانات شاحنته بنفسه بعد قبول الدعوة.</p>
@@ -206,7 +205,7 @@ function DispatchModal({ driver, onClose }: { driver: DriverEntry; onClose: () =
             <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 3 }}>تعيين لمهمة</div>
             <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>{driver.fullName}</h3>
             {driver.plateNumber && (
-              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 3 }}>🚛 {driver.plateNumber}{driver.capacityLiters ? ` · ${fmtCapacity(driver.capacityLiters)}` : ""}</div>
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 3 }}>{driver.plateNumber}{driver.capacityLiters ? ` · ${fmtCapacity(driver.capacityLiters)}` : ""}</div>
             )}
           </div>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", fontSize: 18, color: "white", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
@@ -314,14 +313,13 @@ export default function ProviderFleet() {
       {/* ── KPI Strip ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 22 }}>
         {[
-          { label: "سائقون نشطون",  value: activeCount,    icon: "✅", bg: "#ecfeff", color: "#0891b2" },
-          { label: "دعوات معلقة",   value: invitedCount,   icon: "📤", bg: "#fef3c7", color: "#d97706" },
-          { label: "موقوفون",        value: suspendedCount, icon: "🚫", bg: "#fee2e2", color: "#dc2626" },
+          { label: "سائقون نشطون",  value: activeCount },
+          { label: "دعوات معلقة",   value: invitedCount },
+          { label: "موقوفون",        value: suspendedCount },
         ].map(stat => (
           <div key={stat.label} style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 14, padding: "18px 22px", display: "flex", alignItems: "center", gap: 16 }}>
-            <div style={{ width: 46, height: 46, borderRadius: 12, background: stat.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{stat.icon}</div>
             <div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: stat.color, lineHeight: 1 }}>{stat.value}</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#12384f", lineHeight: 1 }}>{stat.value}</div>
               <div style={{ fontSize: 12, color: "#6b8aa0", marginTop: 3 }}>{stat.label}</div>
             </div>
           </div>
@@ -331,12 +329,11 @@ export default function ProviderFleet() {
       {/* ── Filters Bar ── */}
       <div style={{ background: "white", border: "1px solid #d8eef8", borderRadius: 12, padding: "14px 18px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-          <span style={{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", color: "#8eb5c8", fontSize: 14 }}>🔍</span>
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="ابحث بالاسم أو البريد الإلكتروني..."
-            style={{ width: "100%", padding: "9px 34px 9px 12px", border: "1px solid #d8eef8", borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none", direction: "rtl", background: "#fafcff" }}
+            style={{ width: "100%", padding: "9px 12px", border: "1px solid #d8eef8", borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none", direction: "rtl", background: "#fafcff" }}
           />
         </div>
 
@@ -427,7 +424,7 @@ export default function ProviderFleet() {
                         {/* Truck row */}
                         <div style={{ marginTop: 4, fontSize: 12, color: hasTruck ? "#0284c7" : "#9ca3af", fontWeight: hasTruck ? 700 : 400 }}>
                           {hasTruck
-                            ? `🚛 ${driver.plateNumber || "—"}  ·  💧 ${fmtCapacity(driver.capacityLiters)}`
+                            ? `${driver.plateNumber || "—"}  ·  ${fmtCapacity(driver.capacityLiters)}`
                             : "لم تُضف بيانات الشاحنة بعد"}
                         </div>
                       </div>
@@ -443,13 +440,13 @@ export default function ProviderFleet() {
                 {/* Card Body */}
                 <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, flex: 1 }}>
                   <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "9px 11px" }}>
-                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 3 }}>🚛 الموديل</div>
+                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 3 }}>الموديل</div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: hasTruck ? "#12384f" : "#9ca3af" }}>
                       {driver.vehicleModel || "—"}
                     </div>
                   </div>
                   <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "9px 11px" }}>
-                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 3 }}>📍 المنطقة</div>
+                    <div style={{ fontSize: 10, color: "#8eb5c8", fontWeight: 700, marginBottom: 3 }}>المنطقة</div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#12384f" }}>{driver.zone || "—"}</div>
                   </div>
                   <div style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 9, padding: "9px 11px" }}>

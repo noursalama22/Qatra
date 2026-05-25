@@ -5,6 +5,9 @@ import { AuthUser } from "./RequireRole";
 import { NGO_NAV_GROUPS, NGO_STANDALONE_NAV, ROLE_NAV } from "../routes";
 import Logo from "./Logo";
 
+const DEMO_PROVIDER_ID = "seed-p1";
+const DEMO_PROVIDER_NAME = "مياه الجنوب";
+
 function navClass(isActive: boolean, extra = "") {
   return `${extra} nav-item${isActive ? " active" : ""}`.trim();
 }
@@ -21,6 +24,7 @@ export default function Sidebar({ user }: Props) {
     Object.fromEntries(NGO_NAV_GROUPS.map(g => [g.id, !g.defaultOpen])),
   );
   const [ngoBadges, setNgoBadges] = useState({ active: 0, delivered: 0 });
+  const [providerTaskBadge, setProviderTaskBadge] = useState(0);
 
   useEffect(() => {
     if (role !== "ngo") return;
@@ -35,6 +39,30 @@ export default function Sidebar({ user }: Props) {
       })
       .catch(() => undefined);
   }, [role, location.pathname]);
+
+  useEffect(() => {
+    if (role !== "provider") return;
+    const profile = user.profile ?? {};
+    const providerId = typeof profile.providerId === "string" && profile.providerId ? profile.providerId : DEMO_PROVIDER_ID;
+    const providerName = typeof profile.companyName === "string" && profile.companyName ? profile.companyName : DEMO_PROVIDER_NAME;
+    Promise.all([
+      fetch("/api/tasks").then(r => r.json()).catch(() => ({ data: [] })),
+      fetch("/api/orders").then(r => r.json()).catch(() => ({ data: [] })),
+    ]).then(([taskRes, orderRes]) => {
+      const tasks = taskRes.data ?? [];
+      const orders = orderRes.data ?? [];
+      const ngoTaskCount = tasks.filter((task: { status: string; notes?: string | null; assignedProviderIds?: string[] }) => {
+        const isOpen = task.status === "pending" || task.status === "in_progress";
+        const assigned = Array.isArray(task.assignedProviderIds) && task.assignedProviderIds.includes(providerId);
+        const namedProvider = typeof task.notes === "string" && task.notes.includes(providerName);
+        return isOpen && (assigned || namedProvider);
+      }).length;
+      const citizenTaskCount = orders.filter((order: { providerId?: string | null; status: string }) =>
+        order.providerId === providerId && (order.status === "pending" || order.status === "dispatched")
+      ).length;
+      setProviderTaskBadge(ngoTaskCount + citizenTaskCount);
+    });
+  }, [role, user.profile, location.pathname]);
 
   const toggleNavGroup = (groupId: string) => {
     setCollapsedNavGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -108,16 +136,22 @@ export default function Sidebar({ user }: Props) {
             ))}
           </>
         ) : (
-          ROLE_NAV[role].map(item => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.end}
-              className={({ isActive }) => navClass(isActive)}
-            >
-              {item.label}
-            </NavLink>
-          ))
+          ROLE_NAV[role].map(item => {
+            const badge = role === "provider" && item.path === "/provider/tasks" && providerTaskBadge > 0
+              ? providerTaskBadge
+              : null;
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end={item.end}
+                className={({ isActive }) => navClass(isActive)}
+              >
+                <span>{item.label}</span>
+                {badge != null && <span className="nav-item-badge">{badge}</span>}
+              </NavLink>
+            );
+          })
         )}
       </nav>
 

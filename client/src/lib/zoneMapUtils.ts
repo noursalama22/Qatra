@@ -19,6 +19,7 @@ export type MapZone = {
   lastDeliveryAt: string | null;
   description: string;
   boundary: [number, number][] | null;
+  center?: [number, number] | null;
 };
 
 export type MapTask = {

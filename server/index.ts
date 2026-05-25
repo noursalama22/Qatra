@@ -28,6 +28,9 @@ const authRoles = ["admin", "ngo", "provider", "driver", "citizen"] as const;
 const publicRegistrationRoles = ["ngo", "provider"] as const;
 type AuthRole = typeof authRoles[number];
 type ProfileRecord = Record<string, unknown> | null;
+type DriverRow = typeof driversTable.$inferSelect;
+type ProviderRow = typeof providersTable.$inferSelect;
+type GpsRow = typeof gpsPositionsTable.$inferSelect;
 
 app.use(session({
   store: new PgSession({
@@ -59,6 +62,8 @@ const optionalClean = (value: unknown) => {
   const next = clean(value);
   return next || null;
 };
+const NGO_DEFAULT_WALLET_BUDGET = 10000;
+const NGO_FALLBACK_PRICE_PER_LITER = 0.045;
 
 function normalizePhone(raw: unknown) {
   const digits = clean(raw).replace(/\D/g, "");
@@ -68,6 +73,38 @@ function normalizePhone(raw: unknown) {
   if (digits.startsWith("0") && digits.length >= 10) return `+970${digits.slice(1)}`;
   if (digits.length === 9) return `+970${digits}`;
   return `+${digits}`;
+}
+
+function statusFromProfile(role: AuthRole, profile: ProfileRecord, fallback: "pending" | "approved" | "rejected") {
+  if (role === "admin" || role === "citizen") return "approved" as const;
+  const status = profile && typeof profile.status === "string" ? profile.status : fallback;
+  return status === "approved" || status === "rejected" ? status : "pending";
+}
+
+function taskCost(task: { quantityLiters: string; notes: string | null }) {
+  const explicitCost = task.notes?.match(/(?:cost|تكلفة):\s*\$?([0-9]+(?:\.[0-9]+)?)/i)?.[1];
+  const cost = explicitCost ? Number(explicitCost) : Number(task.quantityLiters) * NGO_FALLBACK_PRICE_PER_LITER;
+  return Number.isFinite(cost) ? cost : 0;
+}
+
+function isTaskFinanciallyApproved(task: { notes: string | null }) {
+  return /\bapprovedAt:/.test(task.notes ?? "");
+}
+
+async function getNgoWallet(ngoId: string) {
+  const tasks = await db.select().from(distributionTasksTable).where(eq(distributionTasksTable.ngoId, ngoId));
+  const committed = tasks.filter(t => t.status !== "cancelled");
+  const spentOrReserved = committed.reduce((sum, task) => sum + taskCost(task), 0);
+  const escrow = committed
+    .filter(task => !isTaskFinanciallyApproved(task))
+    .reduce((sum, task) => sum + taskCost(task), 0);
+
+  return {
+    budget: NGO_DEFAULT_WALLET_BUDGET,
+    available: Math.max(0, NGO_DEFAULT_WALLET_BUDGET - spentOrReserved),
+    escrow,
+    spent: Math.max(0, spentOrReserved - escrow),
+  };
 }
 
 async function hashPassword(password: string) {
@@ -134,6 +171,12 @@ async function getAuthUser(userId: string) {
   if (!roleRow || !isAuthRole(roleRow.role)) return null;
 
   const profile = await getProfile(roleRow.role, roleRow.profileId ?? null);
+  const roleStatus = statusFromProfile(roleRow.role, profile, roleRow.status);
+  if (roleStatus !== roleRow.status) {
+    await db.update(userRolesTable)
+      .set({ status: roleStatus })
+      .where(eq(userRolesTable.userId, user.id));
+  }
   return {
     id: user.id,
     email: user.email,
@@ -142,7 +185,7 @@ async function getAuthUser(userId: string) {
     lastName: user.lastName,
     profileImageUrl: user.profileImageUrl,
     role: roleRow.role,
-    roleStatus: roleRow.status,
+    roleStatus,
     profile,
   };
 }
@@ -509,6 +552,11 @@ app.patch("/api/ngos/:id", async (req, res) => {
       .where(eq(ngosTable.id, req.params.id))
       .returning();
     if (!updated) return res.status(404).json({ error: "Not found" });
+    if (updated.userId && (updated.status === "approved" || updated.status === "pending" || updated.status === "rejected")) {
+      await db.update(userRolesTable)
+        .set({ status: updated.status })
+        .where(eq(userRolesTable.userId, updated.userId));
+    }
     res.json(updated);
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
@@ -562,12 +610,20 @@ app.get("/api/tasks", async (_req, res) => {
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+app.get("/api/ngos/:id/wallet", async (req, res) => {
+  try {
+    res.json(await getNgoWallet(req.params.id));
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 app.post("/api/tasks", async (req, res) => {
   try {
-    const { ngoId, zoneId, quantityLiters, scheduledAt, notes } = req.body;
+    const { ngoId, zoneId, quantityLiters, scheduledAt, notes, estimatedCost } = req.body;
+    const cost = Number(estimatedCost);
+    const financialNote = Number.isFinite(cost) && cost > 0 ? ` | cost:${cost.toFixed(2)}` : "";
     const [task] = await db.insert(distributionTasksTable).values({
       ngoId, zoneId, quantityLiters: String(quantityLiters),
-      scheduledAt: new Date(scheduledAt), notes: notes || null,
+      scheduledAt: new Date(scheduledAt), notes: notes ? `${notes}${financialNote}` : financialNote.trim() || null,
     }).returning();
     res.status(201).json(task);
   } catch (e) { res.status(500).json({ error: String(e) }); }
@@ -588,6 +644,21 @@ app.patch("/api/tasks/:id", async (req, res) => {
         .where(eq(zonesTable.id, updated.zoneId));
     }
     res.json(updated);
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.patch("/api/tasks/:id/approve", async (req, res) => {
+  try {
+    const [task] = await db.select().from(distributionTasksTable).where(eq(distributionTasksTable.id, req.params.id));
+    if (!task) return res.status(404).json({ error: "Not found" });
+    const approvedNote = isTaskFinanciallyApproved(task)
+      ? task.notes
+      : `${task.notes ?? ""}${task.notes ? " | " : ""}approvedAt:${new Date().toISOString()}`;
+    const [updated] = await db.update(distributionTasksTable)
+      .set({ notes: approvedNote, updatedAt: new Date() })
+      .where(eq(distributionTasksTable.id, req.params.id))
+      .returning();
+    res.json({ task: updated, wallet: await getNgoWallet(updated.ngoId) });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
@@ -668,13 +739,23 @@ app.post("/api/gps", async (req, res) => {
 
 app.get("/api/map", async (_req, res) => {
   try {
-    const [zones, tasks, drivers, providers, gpsRows] = await Promise.all([
+    const [zones, tasks] = await Promise.all([
       db.select().from(zonesTable),
       db.select().from(distributionTasksTable),
-      db.select().from(driversTable),
-      db.select().from(providersTable),
-      db.select().from(gpsPositionsTable).orderBy(desc(gpsPositionsTable.recordedAt)),
     ]);
+    let drivers: DriverRow[] = [];
+    let providers: ProviderRow[] = [];
+    let gpsRows: GpsRow[] = [];
+
+    try {
+      [drivers, providers, gpsRows] = await Promise.all([
+        db.select().from(driversTable),
+        db.select().from(providersTable),
+        db.select().from(gpsPositionsTable).orderBy(desc(gpsPositionsTable.recordedAt)),
+      ]);
+    } catch (driverMapError) {
+      console.warn("Map driver overlays unavailable:", driverMapError);
+    }
 
     // Latest GPS per driver
     const latestGps: Record<string, typeof gpsRows[0]> = {};
@@ -694,6 +775,8 @@ app.get("/api/map", async (_req, res) => {
       return {
         id: z.id,
         name: z.name,
+        description: z.description,
+        regionId: z.regionId,
         status: z.status,
         populationEstimate: z.populationEstimate ?? 0,
         signalCount: z.signalCount,

@@ -8,4 +8,10 @@ export async function runMigrations() {
     ON users (phone)
     WHERE phone IS NOT NULL
   `);
+  await pool.query(`
+    ALTER TABLE delivery_orders
+      ADD COLUMN IF NOT EXISTS scheduled_at timestamp with time zone,
+      ADD COLUMN IF NOT EXISTS payment_method varchar(32),
+      ADD COLUMN IF NOT EXISTS delivery_note text
+  `);
 }

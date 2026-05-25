@@ -1,4 +1,4 @@
-import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { api, Provider, Zone } from "../api";
 import { RoleFields } from "../App";
@@ -71,6 +71,10 @@ export default function AppLayout({ user, setUser, onLogout }: Props) {
   const currentRole = getRoleMeta(role);
   const displayName = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim();
   const initials = `${user.firstName?.trim().charAt(0) ?? "Q"}${user.lastName?.trim().charAt(0) ?? ""}`;
+  const avatarStyle = {
+    "--avatar-bg": currentRole.color,
+    "--avatar-fg": "#ffffff",
+  } as CSSProperties;
 
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(() => getProfileDraft(user));
   const [menuOpen, setMenuOpen] = useState(false);
@@ -143,7 +147,7 @@ export default function AppLayout({ user, setUser, onLogout }: Props) {
 
             <div className="user-menu" ref={menuRef}>
             <button className="user-menu-trigger" onClick={() => setMenuOpen(open => !open)} aria-haspopup="menu" aria-expanded={menuOpen}>
-              <span className="avatar" style={{ background: currentRole.color }}>{initials}</span>
+              <span className="avatar" style={avatarStyle}>{initials}</span>
               <span className="user-menu-copy">
                 <strong>{displayName}</strong>
                 <small>{currentRole.label} · {roleStatusLabel(user.roleStatus)}</small>
@@ -170,7 +174,7 @@ export default function AppLayout({ user, setUser, onLogout }: Props) {
           <form className="modal profile-modal" onSubmit={saveProfile} onClick={event => event.stopPropagation()}>
             <h3>إعدادات الملف الشخصي</h3>
             <div className="profile-modal-user">
-              <span className="avatar avatar-lg" style={{ background: currentRole.color }}>{initials}</span>
+              <span className="avatar avatar-lg" style={avatarStyle}>{initials}</span>
               <div>
                 <strong>{displayName}</strong>
                 <span>{currentRole.label} · {roleStatusLabel(user.roleStatus)}</span>

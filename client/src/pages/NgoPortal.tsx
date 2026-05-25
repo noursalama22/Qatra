@@ -5,6 +5,7 @@ import NgoReportsTab from "../components/ngo/NgoReportsTab";
 import Dashboard from "./Dashboard";
 import NgoTasksPage from "./NgoTasksPage";
 import { isNgoSection } from "../routes";
+import { MY_NGO_ID } from "../lib/zoneMapUtils";
 
 type Zone = {
   id: string; name: string; status: string; populationEstimate: number;
@@ -35,19 +36,21 @@ export default function NgoPortal() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
 
   const load = useCallback(async () => {
-    const [z, t] = await Promise.all([
+    const [z, t, w] = await Promise.all([
       fetch("/api/zones").then(r => r.json()),
       fetch("/api/tasks").then(r => r.json()),
+      fetch(`/api/ngos/${MY_NGO_ID}/wallet`).then(r => r.json()),
     ]);
     setZones(z.data ?? []);
     setTasks(t.data ?? []);
+    setWallet({ available: w.available ?? 0, escrow: w.escrow ?? 0 });
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const approveDelivery = (task: Task) => {
-    const cost = Number(task.quantityLiters) * 0.045;
-    setWallet(w => ({ ...w, escrow: Math.max(0, w.escrow - cost) }));
+  const approveDelivery = async (task: Task) => {
+    await fetch(`/api/tasks/${task.id}/approve`, { method: "PATCH" });
+    await load();
     showToast("تم الاعتماد — حُوِّل المبلغ لمحفظة المزود وصدر تقرير رسمي");
   };
 

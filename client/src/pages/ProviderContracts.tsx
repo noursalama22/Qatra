@@ -34,8 +34,8 @@ const PRIORITY_CONFIG: Record<ContractPriority, { label: string; bg: string; col
   normal: { label: "عادي",         bg: "#e0f2fe", color: "#0284c7" },
 };
 
-function fmtAED(n: number | string) {
-  return Number(n).toLocaleString("ar-AE") + " د.إ.";
+function fmtILS(n: number | string) {
+  return Number(n).toLocaleString("ar-AE") + " ₪";
 }
 
 function fmtVol(n: number) {
@@ -102,7 +102,7 @@ function ContractDetail({ contract, onClose, onStatusChange }: {
             <span style={{ background: "rgba(255,255,255,0.15)", fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20 }}>{contract.contractNumber}</span>
           </div>
           <h3 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 4px" }}>{contract.clientName}</h3>
-          {contract.location && <p style={{ fontSize: 13, opacity: 0.75, margin: 0 }}>📍 {contract.location}</p>}
+          {contract.location && <p style={{ fontSize: 13, opacity: 0.75, margin: 0 }}>{contract.location}</p>}
         </div>
 
         {/* Tabs */}
@@ -123,7 +123,7 @@ function ContractDetail({ contract, onClose, onStatusChange }: {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
                 {[
                   { label: "الحجم", value: fmtVol(contract.volumeLiters) },
-                  { label: "القيمة الإجمالية", value: fmtAED(contract.valueAed) },
+                  { label: "القيمة الإجمالية", value: fmtILS(contract.valueAed) },
                   { label: "تاريخ البدء", value: fmtDate(contract.startDate) },
                   { label: "تاريخ الانتهاء", value: fmtDate(contract.endDate) },
                   ...(contract.slaHours ? [{ label: "مستوى الخدمة (SLA)", value: `${contract.slaHours} ساعات` }] : []),
@@ -145,7 +145,6 @@ function ContractDetail({ contract, onClose, onStatusChange }: {
 
           {tab === "deliveries" && (
             <div style={{ textAlign: "center", padding: "40px 20px", color: "#8eb5c8" }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>🚛</div>
               <p style={{ fontSize: 14, fontWeight: 600 }}>
                 {contract.status === "active" ? "لا توجد توصيلات مسجلة لهذا العقد حتى الآن" : "يبدأ تتبع التوصيلات بعد تفعيل العقد"}
               </p>
@@ -156,14 +155,14 @@ function ContractDetail({ contract, onClose, onStatusChange }: {
             <>
               <div style={{ background: "linear-gradient(135deg, #0f3d5c, #0284c7)", borderRadius: 12, padding: "18px 20px", color: "white", marginBottom: 16 }}>
                 <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 6 }}>القيمة التعاقدية الإجمالية</div>
-                <div style={{ fontSize: 28, fontWeight: 800 }}>{fmtAED(contract.valueAed)}</div>
+                <div style={{ fontSize: 28, fontWeight: 800 }}>{fmtILS(contract.valueAed)}</div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 {[
-                  { label: "الإيراد المحتجز", value: fmtAED(Number(contract.valueAed) * 0.3), color: "#d97706" },
-                  { label: "المُحرَّر", value: fmtAED(Number(contract.valueAed) * 0.7), color: "#0891b2" },
-                  { label: "رسوم المنصة (5%)", value: fmtAED(Number(contract.valueAed) * 0.05), color: "#dc2626" },
-                  { label: "صافي المتوقع", value: fmtAED(Number(contract.valueAed) * 0.95), color: "#12384f" },
+                  { label: "الإيراد المحتجز", value: fmtILS(Number(contract.valueAed) * 0.3), color: "#d97706" },
+                  { label: "المُحرَّر", value: fmtILS(Number(contract.valueAed) * 0.7), color: "#0891b2" },
+                  { label: "رسوم المنصة (5%)", value: fmtILS(Number(contract.valueAed) * 0.05), color: "#dc2626" },
+                  { label: "صافي المتوقع", value: fmtILS(Number(contract.valueAed) * 0.95), color: "#12384f" },
                 ].map(row => (
                   <div key={row.label} style={{ background: "#f8fcff", border: "1px solid #e8f5fd", borderRadius: 10, padding: "12px 14px" }}>
                     <div style={{ fontSize: 10, color: "#6b8aa0", fontWeight: 600, marginBottom: 4 }}>{row.label}</div>
@@ -237,39 +236,39 @@ export default function ProviderContracts() {
     <div dir="rtl" style={{ background: "#f3fbff", minHeight: "100vh" }}>
 
       {/* ── Hero Banner ── */}
-      <div style={{ background: "linear-gradient(135deg, #0a2e44 0%, #0c4a6e 50%, #0284c7 100%)", padding: "32px 36px 28px", color: "white" }}>
+      <div style={{ background: "linear-gradient(135deg, #f8fcff 0%, #eef8fd 52%, #e0f7ff 100%)", borderBottom: "1px solid #d8eef8", padding: "32px 36px 28px", color: "#12384f" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
           <div style={{ maxWidth: 480 }}>
-            <div style={{ display: "inline-block", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 20, padding: "4px 14px", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
+            <div style={{ display: "inline-block", background: "#ffffff", border: "1px solid #d8eef8", color: "#31576b", borderRadius: 20, padding: "4px 14px", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
               دورة حياة العقود
             </div>
             <h2 style={{ fontSize: 28, fontWeight: 800, margin: "0 0 10px" }}>إدارة العقود التجارية</h2>
-            <p style={{ fontSize: 13, opacity: 0.8, lineHeight: 1.6, margin: 0 }}>
+            <p style={{ fontSize: 13, color: "#6b8aa0", lineHeight: 1.6, margin: 0 }}>
               راجع عروض المؤسسات، اقبل عقود الطلب الفوري عالية الحجم، وتابع أداء العقود النشطة وإيرادات الضمان في الوقت الفعلي.
             </p>
           </div>
           <button
             onClick={() => { setFilterTab("review"); }}
-            style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 10, padding: "10px 18px", color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+            style={{ display: "flex", alignItems: "center", gap: 8, background: "#ffffff", border: "1px solid #bae6fd", borderRadius: 10, padding: "10px 18px", color: "#0284c7", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
           >
-            📋 مراجعة العروض ({reviewCount})
+            مراجعة العروض ({reviewCount})
           </button>
         </div>
 
         {/* Stats Row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginTop: 28 }}>
           {[
-            { label: "عقود نشطة",    value: activeCount.toString(),       sub: "جارية الآن",     icon: "✅" },
-            { label: "بانتظار الرد", value: reviewCount.toString(),        sub: "عرض جديد",       icon: "⏳" },
-            { label: "إيراد محتجز",  value: fmtAED(escrowValue),           sub: "ضمان مغلق",      icon: "🔒" },
-            { label: "حجم تعاقدي",   value: fmtVol(totalVolume),           sub: "إجمالي مياه",    icon: "💧" },
+            { label: "عقود نشطة",    value: activeCount.toString(),        sub: "جارية الآن" },
+            { label: "بانتظار الرد", value: reviewCount.toString(),        sub: "عرض جديد" },
+            { label: "إيراد محتجز",  value: fmtILS(escrowValue),           sub: "ضمان مغلق" },
+            { label: "حجم تعاقدي",   value: fmtVol(totalVolume),           sub: "إجمالي مياه" },
           ].map(stat => (
-            <div key={stat.label} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: "16px 18px" }}>
-              <div style={{ fontSize: 11, opacity: 0.65, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-                <span>{stat.icon}</span><span>{stat.sub}</span>
+            <div key={stat.label} style={{ background: "#ffffff", border: "1px solid #d8eef8", borderRadius: 12, padding: "16px 18px" }}>
+              <div style={{ fontSize: 11, color: "#6b8aa0", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                <span>{stat.sub}</span>
               </div>
               <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{stat.value}</div>
-              <div style={{ fontSize: 11, opacity: 0.7 }}>{stat.label}</div>
+              <div style={{ fontSize: 11, color: "#6b8aa0" }}>{stat.label}</div>
             </div>
           ))}
         </div>
@@ -281,12 +280,11 @@ export default function ProviderContracts() {
           عرض {filtered.length} من {contracts.length} عقد
         </span>
         <div style={{ position: "relative", flex: 1, maxWidth: 420 }}>
-          <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "#8eb5c8" }}>🔍</span>
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="ابحث باسم المؤسسة أو رقم العقد أو المنطقة..."
-            style={{ width: "100%", padding: "10px 36px 10px 14px", border: "1px solid #d8eef8", borderRadius: 10, fontSize: 13, fontFamily: "inherit", outline: "none", background: "white", direction: "rtl" }}
+            style={{ width: "100%", padding: "10px 14px", border: "1px solid #d8eef8", borderRadius: 10, fontSize: 13, fontFamily: "inherit", outline: "none", background: "white", direction: "rtl" }}
           />
         </div>
       </div>
@@ -320,7 +318,6 @@ export default function ProviderContracts() {
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 20px", color: "#8eb5c8", background: "white", borderRadius: 14, border: "1px dashed #c7e3f2" }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
             <p style={{ fontSize: 14, fontWeight: 600 }}>لا توجد عقود في هذه الفئة</p>
           </div>
         ) : (
@@ -339,7 +336,6 @@ export default function ProviderContracts() {
                   <div style={{ padding: "16px 18px 14px", borderBottom: "1px solid #f0f9ff" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: 10, background: "#dff4ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🏢</div>
                         <div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: "#12384f" }}>{contract.clientName}</div>
                           <div style={{ fontSize: 11, color: "#8eb5c8", fontWeight: 500 }}>{contract.contractNumber}</div>
@@ -358,19 +354,18 @@ export default function ProviderContracts() {
                       </div>
                       <div style={{ background: "#f8fcff", borderRadius: 8, padding: "8px 12px" }}>
                         <div style={{ fontSize: 10, color: "#6b8aa0", fontWeight: 600, marginBottom: 3 }}>القيمة</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0284c7" }}>{fmtAED(contract.valueAed)}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0284c7" }}>{fmtILS(contract.valueAed)}</div>
                       </div>
                     </div>
 
                     {contract.location && (
                       <div style={{ fontSize: 12, color: "#6b8aa0", display: "flex", alignItems: "center", gap: 5 }}>
-                        <span>📍</span><span>{contract.location}</span>
+                        <span>{contract.location}</span>
                       </div>
                     )}
 
                     {contract.startDate && (
                       <div style={{ fontSize: 12, color: "#6b8aa0", display: "flex", alignItems: "center", gap: 5 }}>
-                        <span>📅</span>
                         <span>{fmtDate(contract.startDate)}</span>
                       </div>
                     )}

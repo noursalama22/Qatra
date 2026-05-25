@@ -42,15 +42,6 @@ function timeAgo(iso: string) {
   return `منذ ${Math.floor(h / 24)} يوم`;
 }
 
-const PRIORITY_COLOR: Record<string, string> = {
-  vip: "#0ea5e9", high: "#f59e0b", normal: "#6b8aa0",
-};
-
-const TYPE_ICON: Record<string, string> = {
-  new_contract: "📋",
-  driver_accepted: "✅",
-};
-
 export default function NotificationBell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -97,12 +88,16 @@ export default function NotificationBell() {
     <div ref={ref} style={{ position: "relative" }}>
       <button
         onClick={() => { setOpen(o => !o); if (!open) load(); }}
-        style={{ position: "relative", border: "1px solid #d8eef8", borderRadius: 10, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", background: open ? "#f0f9ff" : "white" }}
+        style={{ position: "relative", border: "1px solid #d8eef8", borderRadius: 10, width: 40, height: 40, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#12384f", cursor: "pointer", background: open ? "#e0f7ff" : "#f8fcff", fontFamily: "inherit" }}
         title="الإشعارات"
+        aria-label="الإشعارات"
       >
-        🔔
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
         {unread > 0 && (
-          <span style={{ position: "absolute", top: -4, right: -4, background: "#ef4444", color: "white", fontSize: 10, fontWeight: 800, width: 18, height: 18, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid white" }}>
+          <span style={{ position: "absolute", top: -5, right: -5, background: "#12384f", color: "white", fontSize: 10, fontWeight: 800, minWidth: 18, height: 18, padding: "0 5px", borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #ffffff" }}>
             {unread > 9 ? "9+" : unread}
           </span>
         )}
@@ -130,7 +125,6 @@ export default function NotificationBell() {
           <div style={{ maxHeight: 380, overflowY: "auto" }}>
             {notifications.length === 0 ? (
               <div style={{ padding: "36px 20px", textAlign: "center", color: "#8eb5c8" }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>🔕</div>
                 <p style={{ fontSize: 13, fontWeight: 600 }}>لا توجد إشعارات حالياً</p>
               </div>
             ) : (
@@ -142,21 +136,17 @@ export default function NotificationBell() {
                     onClick={() => handleClick(n)}
                     style={{ width: "100%", padding: "13px 16px", display: "flex", alignItems: "flex-start", gap: 12, border: "none", borderBottom: "1px solid #f8fbff", background: isUnread ? "#f0f9ff" : "white", cursor: "pointer", textAlign: "right" }}
                   >
-                    {/* Icon */}
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: n.type === "new_contract" ? "#fef3c7" : "#ecfeff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
-                      {TYPE_ICON[n.type]}
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: isUnread ? "#0284c7" : "#d8eef8", marginTop: 7, flexShrink: 0 }}>
                     </div>
 
-                    {/* Text */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
                         <span style={{ fontSize: 12, fontWeight: 700, color: "#12384f" }}>{n.title}</span>
                         {n.type === "new_contract" && n.priority !== "normal" && (
-                          <span style={{ background: PRIORITY_COLOR[n.priority], color: "white", fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 20 }}>
+                          <span style={{ background: "#eef8fd", color: "#31576b", border: "1px solid #d8eef8", fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 20 }}>
                             {n.priority === "vip" ? "VIP" : "عالية"}
                           </span>
                         )}
-                        {isUnread && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", marginRight: "auto" }} />}
                       </div>
                       <div style={{ fontSize: 11, color: "#6b8aa0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.message}</div>
                       <div style={{ fontSize: 10, color: "#aac6d8", marginTop: 3 }}>{timeAgo(n.createdAt)}</div>

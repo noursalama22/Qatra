@@ -48,23 +48,119 @@
 .app-header h2 { font-size: 18px; font-weight: 800; color: #12384f; margin-bottom: 3px; }
 .app-header span { font-size: 12px; color: #6b8aa0; }
 .user-menu { position: relative; flex-shrink: 0; }
-.user-menu-trigger { min-width: 220px; height: 48px; display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 12px; background: #f8fcff; border: 1px solid #d8eef8; border-radius: 8px; cursor: pointer; color: #12384f; font-family: inherit; text-align: right; transition: background 0.15s, border-color 0.15s;
+.user-menu-trigger {
+  min-width: 220px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  background: var(--gray-light);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  color: #12384f;
+  font-family: inherit;
+  text-align: right;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.user-menu-trigger:hover { background: #eef8fd; border-color: #b9d7e6; }
-.avatar { width: 36px; height: 36px; border-radius: 50%; color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; line-height: 1; flex-shrink: 0;
+.user-menu-trigger:hover {
+  background: var(--blue-light);
+  border-color: var(--water-light);
+}
+.user-menu-trigger[aria-expanded="true"] {
+  background: var(--blue-light);
+  border-color: var(--blue);
+  color: #12384f;
+}
+.user-menu-trigger:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--avatar-bg, var(--blue-dark));
+  color: var(--avatar-fg, var(--white));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  flex-shrink: 0;
+  border: 2px solid var(--white);
+  box-shadow: 0 0 0 1px var(--border);
 }
 .avatar-lg { width: 48px; height: 48px; font-size: 16px; }
-.user-menu-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; flex: 1;
+.user-menu-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
 }
-.user-menu-copy strong { font-size: 13px; font-weight: 800; color: #12384f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.user-menu-copy strong {
+  font-size: 13px;
+  font-weight: 800;
+  color: #12384f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.user-menu-copy small { font-size: 11px; font-weight: 600; color: #6b8aa0; }
-.user-menu-chevron { color: #6b8aa0; font-size: 16px !important; line-height: 1; }
-.user-dropdown { position: absolute; top: calc(100% + 8px); right: 0; width: 220px; background: white; border: 1px solid var(--border); border-radius: 8px; box-shadow: none; padding: 6px; z-index: 80;
+.user-menu-copy small {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gray);
 }
-.user-dropdown button { width: 100%; border: 0; background: transparent; color: #12384f; font-family: inherit; font-size: 13px; font-weight: 700; text-align: right; padding: 10px 12px; border-radius: 6px; cursor: pointer;
+.user-menu-chevron {
+  color: var(--gray);
+  font-size: 16px !important;
+  line-height: 1;
+  transition: color 0.15s, transform 0.15s;
 }
-.user-dropdown button:hover { background: #eef8fd; }
+.user-menu-trigger[aria-expanded="true"] .user-menu-chevron {
+  transform: rotate(180deg);
+}
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 220px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: none;
+  padding: 6px;
+  z-index: 80;
+}
+.user-dropdown button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #12384f;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.user-dropdown button:hover {
+  background: var(--blue-light);
+  color: var(--blue-dark);
+}
+.user-dropdown button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+.user-dropdown button:last-child:hover {
+  background: var(--red-light);
+  color: var(--red);
+}
 .profile-modal-user { display: flex; align-items: center; gap: 12px; padding: 12px; background: #f8fcff; border: 1px solid #d8eef8; border-radius: 8px; margin-bottom: 18px;
 }
 .profile-modal-user div { display: flex; flex-direction: column; gap: 3px; }

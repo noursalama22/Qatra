@@ -19,7 +19,95 @@ import {
   zoneStyle,
 } from "../../lib/zoneMapUtils";
 
-type ApiMapZone = MapZone & { center?: [number, number] };
+type LatLng = [number, number];
+
+type ApiMapZone = Omit<MapZone, "boundary" | "center"> & {
+  boundary?: unknown;
+  center?: unknown;
+  regionId?: string | null;
+  description?: string | null;
+};
+
+function parseJsonLike(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function normalizeLatLng(value: unknown): LatLng | null {
+  if (!Array.isArray(value) || value.length < 2) return null;
+  const lat = Number(value[0]);
+  const lng = Number(value[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return [lat, lng];
+}
+
+function normalizeGeoJsonLngLat(value: unknown): LatLng | null {
+  if (!Array.isArray(value) || value.length < 2) return null;
+  const lng = Number(value[0]);
+  const lat = Number(value[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return [lat, lng];
+}
+
+function normalizeBoundary(rawValue: unknown): LatLng[] | null {
+  const value = parseJsonLike(rawValue);
+
+  if (Array.isArray(value)) {
+    const direct = value
+      .map(normalizeLatLng)
+      .filter((point): point is LatLng => Boolean(point));
+    if (direct.length >= 3) return direct;
+
+    const firstRing = value.find(Array.isArray);
+    return firstRing ? normalizeBoundary(firstRing) : null;
+  }
+
+  if (value && typeof value === "object" && "coordinates" in value) {
+    const geo = value as { type?: string; coordinates?: unknown };
+    if (geo.type === "Polygon" && Array.isArray(geo.coordinates)) {
+      const ring = geo.coordinates[0];
+      if (Array.isArray(ring)) {
+        const points = ring
+          .map(normalizeGeoJsonLngLat)
+          .filter((point): point is LatLng => Boolean(point));
+        return points.length >= 3 ? points : null;
+      }
+    }
+    if (geo.type === "MultiPolygon" && Array.isArray(geo.coordinates)) {
+      return normalizeBoundary({ type: "Polygon", coordinates: geo.coordinates[0] });
+    }
+  }
+
+  return null;
+}
+
+function normalizeCenter(rawValue: unknown, boundary: LatLng[] | null): LatLng | null {
+  const value = parseJsonLike(rawValue);
+  const direct = normalizeLatLng(value);
+  if (direct) return direct;
+
+  if (value && typeof value === "object" && "coordinates" in value) {
+    const geo = value as { type?: string; coordinates?: unknown };
+    if (geo.type === "Point") return normalizeGeoJsonLngLat(geo.coordinates);
+  }
+
+  if (!boundary?.length) return null;
+  const lat = boundary.reduce((sum, point) => sum + point[0], 0) / boundary.length;
+  const lng = boundary.reduce((sum, point) => sum + point[1], 0) / boundary.length;
+  return [lat, lng];
+}
+
+function zoneStatusLabel(zone: MapZone, tasks: MapTask[]) {
+  const covered = isZoneCovered(zone, tasks);
+  const need = needLevel(zone.signalCount);
+  return covered ? "مغطى حالياً" : need === "high" ? "احتياج عالٍ" : need === "medium" ? "احتياج متوسط" : "احتياج منخفض";
+}
 
 type Props = {
   onToast: (msg: string) => void;
@@ -76,23 +164,28 @@ export default function NgoDistributionMap({
   );
 
   const load = useCallback(async () => {
-    const [mapRes, tRes, cRes] = await Promise.all([
-      fetch("/api/map").then(r => r.json()),
+    const [zRes, tRes, cRes] = await Promise.all([
+      fetch("/api/zones").then(r => r.json()),
       fetch("/api/tasks").then(r => r.json()),
       fetch(`/api/ngos/${MY_NGO_ID}/contracts`).then(r => r.json()),
     ]);
-    const mapZones: ApiMapZone[] = mapRes.zones ?? [];
-    setZones(mapZones.map(z => ({
-      id: z.id,
-      name: z.name,
-      status: z.status,
-      regionId: null,
-      populationEstimate: z.populationEstimate ?? 0,
-      signalCount: z.signalCount ?? 0,
-      lastDeliveryAt: z.lastDeliveryAt ?? null,
-      description: "",
-      boundary: z.boundary ?? null,
-    })));
+    const mapZones: ApiMapZone[] = zRes.data ?? [];
+    setZones(mapZones.map(z => {
+      const boundary = normalizeBoundary(z.boundary);
+      const center = normalizeCenter(z.center, boundary);
+      return {
+        id: z.id,
+        name: z.name,
+        status: z.status,
+        regionId: z.regionId ?? null,
+        populationEstimate: z.populationEstimate ?? 0,
+        signalCount: z.signalCount ?? 0,
+        lastDeliveryAt: z.lastDeliveryAt ?? null,
+        description: z.description ?? "",
+        boundary,
+        center,
+      };
+    }));
     setTasks(tRes.data ?? []);
     setContracts(cRes.data ?? []);
     setLoading(false);
@@ -178,8 +271,27 @@ export default function NgoDistributionMap({
       const allPoints: [number, number][] = [];
 
       zones.forEach(zone => {
-        if (!zone.boundary || zone.boundary.length < 3) return;
         const style = zoneStyle(zone, myTasks, false);
+        const statusLabel = zoneStatusLabel(zone, myTasks);
+
+        if (!zone.boundary || zone.boundary.length < 3) {
+          if (!zone.center) return;
+          const marker = L.circleMarker(zone.center, {
+            ...style,
+            radius: 13,
+            fillOpacity: Math.max(style.fillOpacity, 0.62),
+          }).addTo(layer);
+          allPoints.push(zone.center);
+          marker.bindTooltip(
+            `<b>${zone.name}</b><br/>${statusLabel}<br/>${zone.signalCount} إشارة`,
+            { sticky: true, className: "dash-map-tooltip" },
+          );
+          marker.on("click", () => {
+            setSearchParams({ zone: zone.id });
+          });
+          return;
+        }
+
         const poly = L.polygon(zone.boundary, {
           ...style,
           smoothFactor: 2,
@@ -188,10 +300,6 @@ export default function NgoDistributionMap({
         }).addTo(layer);
 
         allPoints.push(...zone.boundary);
-
-        const covered = isZoneCovered(zone, myTasks);
-        const need = needLevel(zone.signalCount);
-        const statusLabel = covered ? "مغطى حالياً" : need === "high" ? "احتياج عالٍ" : need === "medium" ? "احتياج متوسط" : "احتياج منخفض";
 
         poly.bindTooltip(
           `<b>${zone.name}</b><br/>${statusLabel}<br/>${zone.signalCount} إشارة`,
@@ -238,14 +346,13 @@ export default function NgoDistributionMap({
         zoneId: scheduleZone.id,
         quantityLiters: String(liters),
         scheduledAt: dt.toISOString(),
+        estimatedCost: missionCost,
         notes: `مزود: ${selectedProvider.companyName}`,
       }),
     });
 
-    setWallet(w => ({
-      available: w.available - missionCost,
-      escrow: w.escrow + missionCost,
-    }));
+    const walletRes = await fetch(`/api/ngos/${MY_NGO_ID}/wallet`).then(r => r.json());
+    setWallet({ available: walletRes.available ?? 0, escrow: walletRes.escrow ?? 0 });
     await load();
     setSubmitting(false);
     onToast("تم إرسال المهمة للمزود");

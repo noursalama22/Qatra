@@ -58,6 +58,7 @@ export type Task = {
   ngoName?: string | null;
   providerNames?: string[];
 };
+export type NgoWallet = { budget: number; available: number; escrow: number; spent: number };
 export type Region = { id: string; name: string; description: string | null; sortOrder: number };
 export type RegionProvider = {
   id: string; companyName: string; operatingModes: string[]; status: string;

@@ -56,7 +56,7 @@ const NGO_TASKS_MOCK: NgoTask[] = [
       { label: "في الطريق", date: "2026-05-20 07:15" },
       { label: "تم التسليم", date: "2026-05-20 09:45" },
     ],
-    deliveryPhotos: [], parentContractId: "CTR-0041", deliveryApproved: true,
+    deliveryPhotos: [], parentContractId: "CTR-0041", deliveryApproved: false,
   },
   {
     id: "nt2", tripNumber: "TRP-2024-002", contractNumber: "CTR-0041", orgName: "برنامج WASH غزة",
@@ -267,7 +267,7 @@ function ActionButton({ status, approved, onAction }: ActionButtonProps) {
         <button
           style={{ fontSize: 12, padding: "6px 14px", whiteSpace: "nowrap", background: "#16a34a", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}
           onClick={e => { e.stopPropagation(); onAction("approve"); }}
-        >اعتماد التسليم</button>
+        >تأكيد الاستلام</button>
       );
     }
     return (
@@ -443,7 +443,7 @@ function NgoSidePanel({ task, onClose, onApprove }: SidePanelNgoProps) {
             <button
               style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontFamily: "inherit", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%" }}
               onClick={() => onApprove(task.id)}
-            >اعتماد التسليم</button>
+            >تأكيد الاستلام</button>
           )}
         </div>
       </div>
@@ -519,7 +519,7 @@ function CitizenSidePanel({ task, onClose, onApprove }: SidePanelCitizenProps) {
             <button
               style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 8, padding: "12px 0", fontFamily: "inherit", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%" }}
               onClick={() => onApprove(task.id)}
-            >اعتماد التسليم</button>
+            >تأكيد الاستلام</button>
           )}
         </div>
       </div>
@@ -763,7 +763,7 @@ function ApproveModal({
               onClick={onClose}
               style={{ position: "absolute", top: 13, left: 14, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 28, height: 28, color: "#fff", cursor: "pointer", fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}
             >×</button>
-            <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 3 }}>اعتماد التسليم</div>
+            <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 3 }}>تأكيد الاستلام</div>
             <div style={{ fontSize: 12, opacity: 0.8 }}>{target.label} · {target.partyName} · {target.region}</div>
           </div>
 
@@ -811,7 +811,7 @@ function ApproveModal({
               </div>
               {!locationOk && (
                 <div style={{ marginTop: 10, background: "#fef2f2", border: "0.5px solid #fca5a5", borderRadius: 8, padding: "8px 10px", fontSize: 11, color: "#991b1b", fontWeight: 600 }}>
-                  لا يمكن اعتماد التسليم — الموقع خارج نطاق 200 متر من الوجهة المحددة.
+                  لا يمكن تأكيد الاستلام — الموقع خارج نطاق 200 متر من الوجهة المحددة.
                 </div>
               )}
             </div>
@@ -860,7 +860,7 @@ function ApproveModal({
               <div style={{ background: "#fffbeb", border: "0.5px solid #fbbf24", borderRadius: 8, padding: "10px 12px", display: "flex", gap: 8, alignItems: "flex-start" }}>
                 <span style={{ fontSize: 14, flexShrink: 0 }}>⚠️</span>
                 <span style={{ fontSize: 12, color: "#92400e", fontWeight: 600, lineHeight: 1.5 }}>
-                  بعد الاعتماد سيتم الإفراج عن مبلغ الضمان للمزود. هذا الإجراء لا يمكن التراجع عنه.
+                  بعد تأكيد الاستلام سيتم الإفراج عن مبلغ الضمان للمزود. هذا الإجراء لا يمكن التراجع عنه.
                 </span>
               </div>
             )}
@@ -879,9 +879,9 @@ function ApproveModal({
                   type="button"
                   disabled={!canApprove}
                   onClick={onApprove}
-                  title={!locationOk ? "لا يمكن الاعتماد: الموقع غير مطابق" : ""}
+                  title={!locationOk ? "لا يمكن التأكيد: الموقع غير مطابق" : ""}
                   style={{ flex: 2, padding: "11px 0", border: "none", borderRadius: 8, background: canApprove ? "#16a34a" : "#e2e8f0", color: canApprove ? "#fff" : "#94a3b8", fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: canApprove ? "pointer" : "not-allowed", transition: "all 0.15s" }}
-                >✓ اعتماد التسليم</button>
+                >✓ تأكيد الاستلام</button>
               </>
             ) : (
               <>
@@ -1258,11 +1258,6 @@ export default function ProviderTasks() {
     completed: citTasks.filter(t => t.status === "completed").length,
   };
 
-  const handleNgoApprove = (id: string) => {
-    setNgoTasks(prev => prev.map(t => t.id === id ? { ...t, deliveryApproved: true } : t));
-    if (selectedNgoTask?.id === id) setSelectedNgoTask(prev => prev ? { ...prev, deliveryApproved: true } : null);
-  };
-
   const handleCitApprove = (id: string) => {
     setCitTasks(prev => prev.map(t => t.id === id ? { ...t, deliveryApproved: true } : t));
     if (selectedCitTask?.id === id) setSelectedCitTask(prev => prev ? { ...prev, deliveryApproved: true } : null);
@@ -1294,7 +1289,7 @@ export default function ProviderTasks() {
 
   const handleApproveApprove = () => {
     if (!approveTarget) return;
-    const timeEntry = { label: "تم التسليم ✓", date: nowLabel() };
+    const timeEntry = { label: "تم تأكيد الاستلام", date: nowLabel() };
     console.log(`[Escrow] Released for task ${approveTarget.taskId} — party: ${approveTarget.partyName}`);
     if (approveTarget.type === "ngo") {
       setNgoTasks(prev => prev.map(t =>
@@ -1314,7 +1309,7 @@ export default function ProviderTasks() {
         setSelectedCitTask(prev => prev ? { ...prev, deliveryApproved: true } : null);
     }
     setApproveTarget(null);
-    showToast("تم اعتماد التسليم بنجاح وإطلاق الضمان", true);
+    showToast("تم تأكيد الاستلام بنجاح وإطلاق الضمان", true);
   };
 
   const handleApproveReject = (reason: string) => {
@@ -1558,7 +1553,21 @@ export default function ProviderTasks() {
         <NgoSidePanel
           task={selectedNgoTask}
           onClose={() => setSelectedNgoTask(null)}
-          onApprove={id => { handleNgoApprove(id); setSelectedNgoTask(null); }}
+          onApprove={() => {
+            setApproveTarget({
+              taskId: selectedNgoTask.id,
+              type: "ngo",
+              contractType: "organization",
+              label: selectedNgoTask.tripNumber,
+              region: selectedNgoTask.region,
+              quantity: selectedNgoTask.quantityLiters,
+              date: selectedNgoTask.date,
+              driver: selectedNgoTask.driver,
+              partyName: selectedNgoTask.orgName,
+              driverGps: [31.502, 34.471],
+              destGps: [31.501, 34.470],
+            });
+          }}
         />
       )}
 
