@@ -391,7 +391,7 @@ export default function DriverPortal() {
 
       {/* ── LIST STAGE ─────────────────────────────────────────── */}
       {stage === "list" && (
-        <div className="driver-pwa-list" dir="rtl" style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        <div className="driver-pwa-list" dir="rtl" style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 64px)", overflow: "hidden" }}>
 
           {/* ── Header (full width) ── */}
           <div className="dpwa-list-header">
