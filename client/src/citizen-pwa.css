@@ -455,6 +455,17 @@
 
 .citizen-status-percent { font-weight: 800; color: var(--green); }
 
+.citizen-zone-coverage-hint {
+  margin: 0;
+  color: #31576b;
+  background: #f8fcff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .citizen-home-critical-stack {
   display: flex;
   flex-direction: column;

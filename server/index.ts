@@ -77,6 +77,12 @@ function normalizePhone(raw: unknown) {
 
 function statusFromProfile(role: AuthRole, profile: ProfileRecord, fallback: "pending" | "approved" | "rejected") {
   if (role === "admin" || role === "citizen") return "approved" as const;
+  if (role === "driver") {
+    const status = profile && typeof profile.status === "string" ? profile.status : "";
+    if (status === "active") return "approved" as const;
+    if (status === "rejected") return "rejected" as const;
+    return fallback === "rejected" ? "rejected" as const : "pending" as const;
+  }
   const status = profile && typeof profile.status === "string" ? profile.status : fallback;
   return status === "approved" || status === "rejected" ? status : "pending";
 }
@@ -120,6 +126,14 @@ async function verifyPassword(password: string, storedHash: string | null) {
   const derived = await scryptAsync(password, salt, 64) as Buffer;
   const stored = Buffer.from(hash, "hex");
   return stored.length === derived.length && timingSafeEqual(stored, derived);
+}
+
+function splitFullName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] ?? fullName,
+    lastName: parts.slice(1).join(" ") || null,
+  };
 }
 
 function userIdFromSession(req: express.Request) {
@@ -1169,8 +1183,22 @@ app.get("/api/provider-drivers", async (req, res) => {
 
 app.post("/api/provider-driver-invites", async (req, res) => {
   try {
-    const { fullName, email, phone, zone, idNumber, providerId, providerName } = req.body;
+    const fullName = clean(req.body.fullName);
+    const email = clean(req.body.email).toLowerCase();
+    const providerId = clean(req.body.providerId);
+    const phone = optionalClean(req.body.phone);
+    const zone = optionalClean(req.body.zone);
+    const idNumber = optionalClean(req.body.idNumber);
+    const providerName = optionalClean(req.body.providerName);
+
     if (!fullName || !email || !providerId) return res.status(400).json({ error: "fullName, email, providerId required" });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Invalid email" });
+
+    const [provider] = await db.select({
+      id: providersTable.id,
+      companyName: providersTable.companyName,
+    }).from(providersTable).where(eq(providersTable.id, providerId));
+    if (!provider) return res.status(404).json({ error: "Provider not found" });
 
     const { randomBytes } = await import("node:crypto");
     const token = randomBytes(32).toString("hex");
@@ -1178,11 +1206,11 @@ app.post("/api/provider-driver-invites", async (req, res) => {
     const [invite] = await db.insert(providerDriverInvitesTable).values({
       fullName,
       email,
-      phone: phone || null,
-      zone: zone || null,
-      idNumber: idNumber || null,
+      phone,
+      zone,
+      idNumber,
       providerId,
-      providerName: providerName || null,
+      providerName: providerName ?? provider.companyName,
       token,
       status: "pending",
     }).returning();
@@ -1196,23 +1224,145 @@ app.get("/api/provider-driver-invites/:token", async (req, res) => {
     const [invite] = await db.select().from(providerDriverInvitesTable)
       .where(eq(providerDriverInvitesTable.token, req.params.token));
     if (!invite) return res.status(404).json({ error: "رابط الدعوة غير صالح أو منتهي الصلاحية" });
-    res.json(invite);
+
+    const [existingUser] = await db.select().from(usersTable).where(eq(usersTable.email, invite.email));
+    let accountActivated = false;
+    if (existingUser) {
+      const [roleRow] = await db.select().from(userRolesTable).where(eq(userRolesTable.userId, existingUser.id));
+      accountActivated = roleRow?.role === "driver";
+    }
+
+    res.json({ ...invite, accountActivated });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
 app.post("/api/provider-driver-invites/:token/accept", async (req, res) => {
   try {
+    const password = String(req.body.password ?? "");
+    if (password.length < 8) {
+      return res.status(400).json({ error: "كلمة المرور يجب أن تكون 8 أحرف على الأقل" });
+    }
+
     const [invite] = await db.select().from(providerDriverInvitesTable)
       .where(eq(providerDriverInvitesTable.token, req.params.token));
     if (!invite) return res.status(404).json({ error: "رابط الدعوة غير صالح" });
-    if (invite.status === "accepted") return res.status(400).json({ error: "تم قبول هذه الدعوة مسبقاً" });
+    if (invite.status === "expired") return res.status(400).json({ error: "انتهت صلاحية الدعوة" });
 
-    await db.update(providerDriverInvitesTable)
-      .set({ status: "accepted" })
-      .where(eq(providerDriverInvitesTable.token, req.params.token));
+    const passwordHash = await hashPassword(password);
+    const names = splitFullName(invite.fullName);
 
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: String(e) }); }
+    const userId = await db.transaction(async (tx) => {
+      const [existingUser] = await tx.select().from(usersTable).where(eq(usersTable.email, invite.email));
+      let user = existingUser;
+
+      if (!user) {
+        [user] = await tx.insert(usersTable).values({
+          email: invite.email,
+          firstName: names.firstName,
+          lastName: names.lastName,
+          phone: invite.phone,
+          passwordHash,
+        }).returning();
+      } else {
+        const [existingRole] = await tx.select().from(userRolesTable).where(eq(userRolesTable.userId, user.id));
+        if (existingRole && existingRole.role !== "driver") {
+          throw new Error("هذا البريد الإلكتروني مرتبط بحساب آخر");
+        }
+        [user] = await tx.update(usersTable)
+          .set({
+            firstName: user.firstName || names.firstName,
+            lastName: user.lastName || names.lastName,
+            phone: user.phone || invite.phone,
+            passwordHash,
+            updatedAt: new Date(),
+          })
+          .where(eq(usersTable.id, user.id))
+          .returning();
+      }
+
+      const [roleRow] = await tx.select().from(userRolesTable).where(eq(userRolesTable.userId, user.id));
+      if (!roleRow) {
+        const [profile] = await tx.insert(driversTable).values({
+          userId: user.id,
+          driverType: "owned",
+          providerId: invite.providerId,
+          status: "active",
+          phone: invite.phone,
+          vehicleType: invite.vehicleModel,
+          plateNumber: invite.plateNumber,
+          vehicleModel: invite.vehicleModel,
+          vehicleCapacityLiters: invite.capacityLiters,
+          vehicleYear: invite.vehicleYear,
+          vehicleNotes: invite.vehicleNotes,
+          fullName: invite.fullName,
+          zone: invite.zone,
+        }).returning();
+
+        await tx.insert(userRolesTable).values({
+          userId: user.id,
+          role: "driver",
+          status: "approved",
+          profileId: profile.id,
+        });
+      } else {
+        const profileId = roleRow.profileId;
+        if (!profileId) {
+          const [profile] = await tx.insert(driversTable).values({
+            userId: user.id,
+            driverType: "owned",
+            providerId: invite.providerId,
+            status: "active",
+            phone: invite.phone,
+            vehicleType: invite.vehicleModel,
+            plateNumber: invite.plateNumber,
+            vehicleModel: invite.vehicleModel,
+            vehicleCapacityLiters: invite.capacityLiters,
+            vehicleYear: invite.vehicleYear,
+            vehicleNotes: invite.vehicleNotes,
+            fullName: invite.fullName,
+            zone: invite.zone,
+          }).returning();
+          await tx.update(userRolesTable)
+            .set({ profileId: profile.id, status: "approved", updatedAt: new Date() })
+            .where(eq(userRolesTable.id, roleRow.id));
+        } else {
+          await tx.update(driversTable).set({
+            driverType: "owned",
+            providerId: invite.providerId,
+            status: "active",
+            phone: invite.phone,
+            vehicleType: invite.vehicleModel,
+            plateNumber: invite.plateNumber,
+            vehicleModel: invite.vehicleModel,
+            vehicleCapacityLiters: invite.capacityLiters,
+            vehicleYear: invite.vehicleYear,
+            vehicleNotes: invite.vehicleNotes,
+            fullName: invite.fullName,
+            zone: invite.zone,
+            updatedAt: new Date(),
+          }).where(eq(driversTable.id, profileId));
+        }
+        if (roleRow.status !== "approved") {
+          await tx.update(userRolesTable)
+            .set({ status: "approved", updatedAt: new Date() })
+            .where(eq(userRolesTable.id, roleRow.id));
+        }
+      }
+
+      await tx.update(providerDriverInvitesTable)
+        .set({ status: "accepted" })
+        .where(eq(providerDriverInvitesTable.token, req.params.token));
+
+      return user.id;
+    });
+
+    setSessionUser(req, userId);
+    const authUser = await getAuthUser(userId);
+    res.json({ success: true, user: authUser });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    res.status(message === "هذا البريد الإلكتروني مرتبط بحساب آخر" ? 409 : 500).json({ error: message });
+  }
 });
 
 app.patch("/api/provider-driver-invites/:token/vehicle", async (req, res) => {
@@ -1237,6 +1387,28 @@ app.patch("/api/provider-driver-invites/:token/vehicle", async (req, res) => {
       })
       .where(eq(providerDriverInvitesTable.token, req.params.token))
       .returning();
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, invite.email));
+    if (user) {
+      const [roleRow] = await db.select().from(userRolesTable).where(eq(userRolesTable.userId, user.id));
+      if (roleRow?.role === "driver" && roleRow.profileId) {
+        await db.update(driversTable).set({
+          providerId: invite.providerId,
+          status: "active",
+          phone: invite.phone,
+          vehicleType: vehicleModel,
+          plateNumber,
+          vehicleModel,
+          vehicleCapacityLiters: Number(capacityLiters),
+          vehicleYear: Number(vehicleYear),
+          vehicleNotes: vehicleNotes || null,
+          fullName: invite.fullName,
+          zone: invite.zone,
+          updatedAt: new Date(),
+        }).where(eq(driversTable.id, roleRow.profileId));
+        setSessionUser(req, user.id);
+      }
+    }
 
     res.json(updated);
   } catch (e) { res.status(500).json({ error: String(e) }); }

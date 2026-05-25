@@ -47,7 +47,7 @@ const TASK_STATUS: Record<string, { ar: string; cls: string }> = {
 export default function CitizenHome() {
   const {
     citizen, selectedZone, zones, setSelectedZone, schedule, loading,
-    zoneStatus, nextDelivery, sendSignal, signalCount, isOnline,
+    zoneStatus, nextDelivery, sendSignal, isOnline,
   } = useCitizenContext();
   const [signalState, setSignalState] = useState<"idle" | "sending" | "sent">("idle");
   const todayKey = new Date().toDateString();
@@ -134,22 +134,9 @@ export default function CitizenHome() {
         <div className="citizen-home-status">
       {zoneStatus === "critical" ? (
         <div className="citizen-home-critical-stack">
-          <div className="citizen-status-card citizen-status-critical">
-            <div className="citizen-status-body">
-              <div className="citizen-status-copy">
-                <h2>منطقتكم بحاجة ماسة للمياه حالياً</h2>
-                <p>
-                  لا توجد عمليات توزيع مجدولة خلال الـ 48 ساعة القادمة.
-                  فرقنا تعمل على تأمين المصادر.
-                </p>
-              </div>
-              <span className="citizen-status-icon citizen-status-icon-warn" aria-hidden>⚠️</span>
-            </div>
-            <div className="citizen-status-footer">
-              <span>🕐</span>
-              <span>آخر تحديث: منذ 10 دقائق · {signalCount} إشارة نشطة</span>
-            </div>
-          </div>
+          <p className="citizen-zone-coverage-hint">
+            ملاحظة: لا يوجد توزيع مجدول لمنطقتك خلال الـ 48 ساعة القادمة.
+          </p>
 
           <button
             type="button"

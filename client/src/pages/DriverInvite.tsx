@@ -9,6 +9,7 @@ type InviteData = {
   providerName: string | null;
   status: string;
   token: string;
+  accountActivated?: boolean;
 };
 
 type Step = "password" | "vehicle" | "done";
@@ -39,7 +40,7 @@ export default function DriverInvite() {
       .then(data => {
         setInvite(data);
         setLoading(false);
-        if (data.status === "accepted") setStep("vehicle");
+        if (data.status === "accepted" && data.accountActivated) setStep("vehicle");
       })
       .catch(e => { setError(typeof e === "string" ? e : "رابط الدعوة غير صالح أو منتهي الصلاحية."); setLoading(false); });
   }, [token]);
@@ -48,11 +49,15 @@ export default function DriverInvite() {
 
   const acceptPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password || password.length < 6) { setPasswordError("كلمة المرور يجب أن تكون 6 أحرف على الأقل"); return; }
+    if (!password || password.length < 8) { setPasswordError("كلمة المرور يجب أن تكون 8 أحرف على الأقل"); return; }
     if (password !== confirm) { setPasswordError("كلمتا المرور غير متطابقتين"); return; }
     setAcceptingPassword(true); setPasswordError(null);
     try {
-      const res = await fetch(`/api/provider-driver-invites/${token}/accept`, { method: "POST" });
+      const res = await fetch(`/api/provider-driver-invites/${token}/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
       setStep("vehicle");
     } catch (e) {
@@ -80,7 +85,7 @@ export default function DriverInvite() {
         }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
-      setStep("done");
+      window.location.assign("/driver");
     } catch (e) {
       setVehicleError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
     } finally { setSavingVehicle(false); }
@@ -103,23 +108,6 @@ export default function DriverInvite() {
         <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
         <h2 style={{ fontSize: 20, fontWeight: 800, color: "#dc2626", marginBottom: 8 }}>رابط غير صالح</h2>
         <p style={{ color: "#6b7280", fontSize: 14, lineHeight: 1.6 }}>{error}</p>
-      </div>
-    </div>
-  );
-
-  // ── Done screen ────────────────────────────────────────────────────────
-
-  if (step === "done") return (
-    <div dir="rtl" style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0a2e44 0%, #0284c7 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ background: "white", borderRadius: 20, padding: "48px 40px", maxWidth: 440, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-        <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #0284c7, #0ea5e9)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>✅</div>
-        <h2 style={{ fontSize: 22, fontWeight: 800, color: "#12384f", marginBottom: 8 }}>مرحباً بك في الفريق!</h2>
-        <p style={{ color: "#6b8aa0", fontSize: 14, lineHeight: 1.6, marginBottom: 20 }}>
-          تم تفعيل حسابك وتسجيل بيانات شاحنتك بنجاح. يمكنك الآن تسجيل الدخول إلى تطبيق قطرة.
-        </p>
-        <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "14px 18px", fontSize: 13, color: "#0284c7", fontWeight: 600, direction: "ltr" }}>
-          ✉️ {invite?.email}
-        </div>
       </div>
     </div>
   );
@@ -197,7 +185,7 @@ export default function DriverInvite() {
               </p>
               <div>
                 <label style={labelStyle}>كلمة المرور</label>
-                <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="٦ أحرف على الأقل" style={inputStyle} />
+                <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="٨ أحرف على الأقل" style={inputStyle} />
               </div>
               <div>
                 <label style={labelStyle}>تأكيد كلمة المرور</label>
