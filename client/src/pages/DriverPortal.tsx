@@ -54,6 +54,14 @@ function centroid(pts: [number, number][]): [number, number] {
   return [lat, lng];
 }
 
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
 export default function DriverPortal() {
   const { user } = useAppContext();
   const profile = getDriverProfile(user);
@@ -255,10 +263,21 @@ export default function DriverPortal() {
 
   async function submitProof() {
     if (!activeTask || !proofFile) return;
+
+    const gps = gpsPosRef.current;
+    const zoneBoundary = activeZone?.boundary ?? null;
+    if (gps && zoneBoundary && zoneBoundary.length > 0) {
+      const [cLat, cLng] = centroid(zoneBoundary);
+      const dist = haversineMeters(gps.lat, gps.lng, cLat, cLng);
+      if (dist > 200) {
+        showToast(`📍 الموقع غير مطابق — أنت على بُعد ${dist} متر من نقطة التسليم. لا يمكن إتمام العملية.`);
+        return;
+      }
+    }
+
     setCompleting(true);
     try {
       const proofDataUrl = await fileToBase64(proofFile);
-      const gps = gpsPosRef.current;
       if (navigator.onLine) {
         await fetch(`/api/driver/tasks/${activeTask.id}`, {
           method: "PATCH", headers: { "Content-Type": "application/json" },
