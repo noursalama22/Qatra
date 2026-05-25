@@ -391,7 +391,9 @@ export default function DriverPortal() {
 
       {/* ── LIST STAGE ─────────────────────────────────────────── */}
       {stage === "list" && (
-        <div className="driver-pwa-list" dir="rtl">
+        <div className="driver-pwa-list" dir="rtl" style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+
+          {/* ── Header (full width) ── */}
           <div className="dpwa-list-header">
             <div className="dpwa-list-header-top">
               <div>
@@ -417,187 +419,187 @@ export default function DriverPortal() {
             </div>
           </div>
 
-          {/* ── Dashboard map ── */}
-          <div style={{ margin: "12px 16px 0", borderRadius: 14, overflow: "hidden", border: "1.5px solid #e0f2fe", boxShadow: "0 2px 8px rgba(8,145,178,0.07)" }}>
-            {/* Legend */}
-            <div dir="rtl" style={{ display: "flex", gap: 14, padding: "8px 14px", background: "#f0f9ff", borderBottom: "1px solid #e0f2fe", fontSize: 11, fontWeight: 600, color: "#475569" }}>
-              <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: "#f59e0b", marginLeft: 4 }} />معلقة</span>
-              <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: "#0891b2", marginLeft: 4 }} />جارية</span>
-              <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: "#22c55e", marginLeft: 4 }} />مُسلَّمة</span>
-            </div>
-            <div ref={dashMapDivRef} style={{ height: 220 }} />
-          </div>
+          {/* ── Two-column body ── */}
+          <div style={{ display: "flex", flex: 1, overflow: "hidden", direction: "rtl" }}>
 
-          {/* ── Filter tabs ── */}
-          {(() => {
-            const filters: { key: "all" | "pending" | "in_progress" | "delivered"; label: string; icon: string; count: number }[] = [
-              { key: "all",         label: "الكل",     icon: "☰",  count: tasks.length },
-              { key: "pending",     label: "معلقة",    icon: "⏳", count: tasks.filter(t => t.status === "pending").length },
-              { key: "in_progress", label: "جارية",    icon: "🚛", count: tasks.filter(t => t.status === "in_progress").length },
-              { key: "delivered",   label: "مُسلَّمة", icon: "✅", count: tasks.filter(t => t.status === "delivered").length },
-            ];
-            return (
-              <div style={{ display: "flex", gap: 6, padding: "4px 16px 14px", overflowX: "auto", scrollbarWidth: "none" }}>
-                {filters.map(f => {
-                  const active = taskFilter === f.key;
-                  return (
-                    <button
-                      key={f.key}
-                      onClick={() => setTaskFilter(f.key)}
-                      style={{
-                        flexShrink: 0,
-                        padding: "7px 14px",
-                        borderRadius: 22,
-                        border: active ? "none" : "1.5px solid #e0f2fe",
-                        background: active ? "linear-gradient(135deg,#0891b2,#0369a1)" : "#fff",
-                        color: active ? "#fff" : "#0369a1",
-                        fontWeight: 700,
-                        fontSize: 13,
-                        fontFamily: "inherit",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 5,
-                        boxShadow: active ? "0 2px 8px rgba(8,145,178,0.35)" : "0 1px 3px rgba(0,0,0,0.06)",
-                        transition: "all 0.15s",
-                      }}
-                    >
-                      <span style={{ fontSize: 13 }}>{f.icon}</span>
-                      {f.label}
-                      <span style={{
-                        background: active ? "rgba(255,255,255,0.22)" : "#e0f2fe",
-                        color: active ? "#fff" : "#0369a1",
-                        borderRadius: 12,
-                        padding: "1px 7px",
-                        fontSize: 11,
-                        fontWeight: 800,
-                        minWidth: 18,
-                        textAlign: "center",
-                      }}>{f.count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })()}
+            {/* RIGHT column — cards list (RTL start) */}
+            <div style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", borderLeft: "1.5px solid #e0f2fe", background: "#f8faff", overflow: "hidden" }}>
 
-          {/* ── In-progress resume card ── */}
-          {inProgressTask && (taskFilter === "all" || taskFilter === "in_progress") && (
-            <button
-              className="dpwa-resume-card"
-              style={{ margin: "0 16px 12px", borderRadius: 14, overflow: "hidden" }}
-              onClick={() => { setActiveTask(inProgressTask); activeTaskRef.current = inProgressTask; setStage("navigate"); startGps(); }}
-            >
-              <div className="dpwa-resume-pulse-ring" />
-              <div className="dpwa-resume-info">
-                <div className="dpwa-resume-title">⚡ مهمة جارية — اضغط للاستكمال</div>
-                <div className="dpwa-resume-sub">
-                  {zones.find(z => z.id === inProgressTask.zoneId)?.name} · {Number(inProgressTask.quantityLiters).toLocaleString()} لتر
-                </div>
-              </div>
-              <div className="dpwa-resume-arrow">←</div>
-            </button>
-          )}
-
-          {/* ── Task list ── */}
-          {(() => {
-            const filtered = tasks.filter(t => taskFilter === "all" ? true : t.status === taskFilter);
-            const STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
-              pending:     { label: "معلقة",    color: "#b45309", bg: "#fffbeb", border: "#fde68a" },
-              in_progress: { label: "جارية",    color: "#0369a1", bg: "#e0f2fe", border: "#bae6fd" },
-              delivered:   { label: "مُسلَّمة", color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" },
-              rejected:    { label: "مرفوضة",   color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
-            };
-            return (
-              <div className="dpwa-list-tasks" style={{ padding: "0 16px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
-                {filtered.length === 0 && (
-                  <div className="dpwa-empty-state" style={{ margin: "24px 0" }}>
-                    <div className="dpwa-empty-icon">🚛</div>
-                    <div className="dpwa-empty-title">لا توجد مهام</div>
-                    <div className="dpwa-empty-sub">لا توجد مهام بهذه الحالة حالياً</div>
-                  </div>
-                )}
-                {filtered.map(task => {
-                  const z = zones.find(zn => zn.id === task.zoneId);
-                  const meta = STATUS_META[task.status] ?? { label: task.status, color: "#64748b", bg: "#f8fafc", border: "#e2e8f0" };
-                  const isDelivered = task.status === "delivered";
-                  const isInProgress = task.status === "in_progress";
-                  const isPending = task.status === "pending";
-                  const clickable = isPending || isInProgress;
-                  return (
-                    <button
-                      key={task.id}
-                      dir="rtl"
-                      disabled={!clickable}
-                      onClick={() => {
-                        if (isPending) acceptTask(task);
-                        else if (isInProgress) { setActiveTask(task); activeTaskRef.current = task; setStage("navigate"); startGps(); }
-                      }}
-                      style={{
-                        display: "flex",
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 14,
-                        background: "#fff",
-                        border: `1.5px solid ${clickable ? "#e0f2fe" : "#f1f5f9"}`,
-                        borderRadius: 14,
-                        padding: "14px 16px",
-                        textAlign: "right",
-                        cursor: clickable ? "pointer" : "default",
-                        opacity: isDelivered ? 0.75 : 1,
-                        boxShadow: clickable ? "0 1px 6px rgba(8,145,178,0.08)" : "none",
-                        fontFamily: "inherit",
-                        width: "100%",
-                        transition: "box-shadow 0.15s, border-color 0.15s",
-                      }}
-                    >
-                      {/* Icon — RTL start = right */}
-                      <div style={{
-                        width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-                        background: meta.bg, border: `1px solid ${meta.border}`,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 20,
-                      }}>
-                        {isDelivered ? "✅" : isInProgress ? "🚛" : "📦"}
-                      </div>
-
-                      {/* Info */}
-                      <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 8, marginBottom: 5 }}>
-                          <span style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {z?.name ?? task.zoneId}
-                          </span>
+              {/* Filter tabs */}
+              {(() => {
+                const filters: { key: "all" | "pending" | "in_progress" | "delivered"; label: string; icon: string; count: number }[] = [
+                  { key: "all",         label: "الكل",     icon: "☰",  count: tasks.length },
+                  { key: "pending",     label: "معلقة",    icon: "⏳", count: tasks.filter(t => t.status === "pending").length },
+                  { key: "in_progress", label: "جارية",    icon: "🚛", count: tasks.filter(t => t.status === "in_progress").length },
+                  { key: "delivered",   label: "مُسلَّمة", icon: "✅", count: tasks.filter(t => t.status === "delivered").length },
+                ];
+                return (
+                  <div style={{ display: "flex", gap: 6, padding: "10px 12px 8px", overflowX: "auto", scrollbarWidth: "none", flexShrink: 0 }}>
+                    {filters.map(f => {
+                      const active = taskFilter === f.key;
+                      return (
+                        <button
+                          key={f.key}
+                          onClick={() => setTaskFilter(f.key)}
+                          style={{
+                            flexShrink: 0,
+                            padding: "6px 12px",
+                            borderRadius: 22,
+                            border: active ? "none" : "1.5px solid #e0f2fe",
+                            background: active ? "linear-gradient(135deg,#0891b2,#0369a1)" : "#fff",
+                            color: active ? "#fff" : "#0369a1",
+                            fontWeight: 700,
+                            fontSize: 12,
+                            fontFamily: "inherit",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                            boxShadow: active ? "0 2px 8px rgba(8,145,178,0.35)" : "0 1px 3px rgba(0,0,0,0.06)",
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          <span>{f.icon}</span>
+                          {f.label}
                           <span style={{
-                            fontSize: 10, fontWeight: 700, color: meta.color,
-                            background: meta.bg, border: `1px solid ${meta.border}`,
-                            borderRadius: 10, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
-                          }}>{meta.label}</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "flex-start", gap: 10, flexWrap: "wrap" }}>
-                          <span style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>
-                            🚰 {Number(task.quantityLiters).toLocaleString()} لتر
-                          </span>
-                          <span style={{ fontSize: 11, color: "#64748b" }}>
-                            📅 {new Date(task.scheduledAt).toLocaleDateString("ar-SY", { weekday: "short", month: "short", day: "numeric" })}
-                          </span>
-                          {z?.populationEstimate ? (
-                            <span style={{ fontSize: 11, color: "#64748b" }}>
-                              👥 {z.populationEstimate.toLocaleString()}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
+                            background: active ? "rgba(255,255,255,0.22)" : "#e0f2fe",
+                            color: active ? "#fff" : "#0369a1",
+                            borderRadius: 12,
+                            padding: "1px 6px",
+                            fontSize: 11,
+                            fontWeight: 800,
+                          }}>{f.count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
-                      {/* Chevron — RTL end = left */}
-                      {clickable && (
-                        <div style={{ color: "#0891b2", fontSize: 18, flexShrink: 0, fontWeight: 700 }}>←</div>
-                      )}
-                    </button>
+              {/* Scrollable cards area */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "0 12px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+
+                {/* In-progress resume card */}
+                {inProgressTask && (taskFilter === "all" || taskFilter === "in_progress") && (
+                  <button
+                    className="dpwa-resume-card"
+                    style={{ borderRadius: 14, overflow: "hidden", flexShrink: 0 }}
+                    onClick={() => { setActiveTask(inProgressTask); activeTaskRef.current = inProgressTask; setStage("navigate"); startGps(); }}
+                  >
+                    <div className="dpwa-resume-pulse-ring" />
+                    <div className="dpwa-resume-info">
+                      <div className="dpwa-resume-title">⚡ مهمة جارية — اضغط للاستكمال</div>
+                      <div className="dpwa-resume-sub">
+                        {zones.find(z => z.id === inProgressTask.zoneId)?.name} · {Number(inProgressTask.quantityLiters).toLocaleString()} لتر
+                      </div>
+                    </div>
+                    <div className="dpwa-resume-arrow">←</div>
+                  </button>
+                )}
+
+                {/* Task cards */}
+                {(() => {
+                  const filtered = tasks.filter(t => taskFilter === "all" ? true : t.status === taskFilter);
+                  const STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
+                    pending:     { label: "معلقة",    color: "#b45309", bg: "#fffbeb", border: "#fde68a" },
+                    in_progress: { label: "جارية",    color: "#0369a1", bg: "#e0f2fe", border: "#bae6fd" },
+                    delivered:   { label: "مُسلَّمة", color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" },
+                    rejected:    { label: "مرفوضة",   color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
+                  };
+                  if (filtered.length === 0) return (
+                    <div className="dpwa-empty-state" style={{ margin: "24px 0" }}>
+                      <div className="dpwa-empty-icon">🚛</div>
+                      <div className="dpwa-empty-title">لا توجد مهام</div>
+                      <div className="dpwa-empty-sub">لا توجد مهام بهذه الحالة حالياً</div>
+                    </div>
                   );
-                })}
+                  return filtered.map(task => {
+                    const z = zones.find(zn => zn.id === task.zoneId);
+                    const meta = STATUS_META[task.status] ?? { label: task.status, color: "#64748b", bg: "#f8fafc", border: "#e2e8f0" };
+                    const isDelivered = task.status === "delivered";
+                    const isInProgress = task.status === "in_progress";
+                    const isPending = task.status === "pending";
+                    const clickable = isPending || isInProgress;
+                    return (
+                      <button
+                        key={task.id}
+                        dir="rtl"
+                        disabled={!clickable}
+                        onClick={() => {
+                          if (isPending) acceptTask(task);
+                          else if (isInProgress) { setActiveTask(task); activeTaskRef.current = task; setStage("navigate"); startGps(); }
+                        }}
+                        style={{
+                          display: "flex",
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 12,
+                          background: "#fff",
+                          border: `1.5px solid ${clickable ? "#e0f2fe" : "#f1f5f9"}`,
+                          borderRadius: 14,
+                          padding: "12px 14px",
+                          textAlign: "right",
+                          cursor: clickable ? "pointer" : "default",
+                          opacity: isDelivered ? 0.75 : 1,
+                          boxShadow: clickable ? "0 1px 6px rgba(8,145,178,0.08)" : "none",
+                          fontFamily: "inherit",
+                          width: "100%",
+                          flexShrink: 0,
+                          transition: "box-shadow 0.15s, border-color 0.15s",
+                        }}
+                      >
+                        <div style={{
+                          width: 40, height: 40, borderRadius: 11, flexShrink: 0,
+                          background: meta.bg, border: `1px solid ${meta.border}`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 18,
+                        }}>
+                          {isDelivered ? "✅" : isInProgress ? "🚛" : "📦"}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 6, marginBottom: 4 }}>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {z?.name ?? task.zoneId}
+                            </span>
+                            <span style={{
+                              fontSize: 10, fontWeight: 700, color: meta.color,
+                              background: meta.bg, border: `1px solid ${meta.border}`,
+                              borderRadius: 10, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0,
+                            }}>{meta.label}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "flex-start", gap: 8, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>
+                              🚰 {Number(task.quantityLiters).toLocaleString()} لتر
+                            </span>
+                            <span style={{ fontSize: 11, color: "#64748b" }}>
+                              📅 {new Date(task.scheduledAt).toLocaleDateString("ar-SY", { weekday: "short", month: "short", day: "numeric" })}
+                            </span>
+                            {z?.populationEstimate ? (
+                              <span style={{ fontSize: 11, color: "#64748b" }}>👥 {z.populationEstimate.toLocaleString()}</span>
+                            ) : null}
+                          </div>
+                        </div>
+                        {clickable && (
+                          <div style={{ color: "#0891b2", fontSize: 16, flexShrink: 0, fontWeight: 700 }}>←</div>
+                        )}
+                      </button>
+                    );
+                  });
+                })()}
               </div>
-            );
-          })()}
+            </div>
+
+            {/* LEFT column — map (RTL end, fills remaining width) */}
+            <div style={{ flex: 1, position: "relative", background: "#e0f2fe" }}>
+              {/* Legend */}
+              <div style={{ position: "absolute", top: 10, right: 10, zIndex: 1000, background: "rgba(255,255,255,0.92)", borderRadius: 10, padding: "6px 12px", display: "flex", gap: 12, fontSize: 11, fontWeight: 600, color: "#475569", boxShadow: "0 1px 6px rgba(0,0,0,0.10)", backdropFilter: "blur(4px)" }}>
+                <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#f59e0b", marginLeft: 4 }} />معلقة</span>
+                <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#0891b2", marginLeft: 4 }} />جارية</span>
+                <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#22c55e", marginLeft: 4 }} />مُسلَّمة</span>
+              </div>
+              <div ref={dashMapDivRef} style={{ position: "absolute", inset: 0 }} />
+            </div>
+          </div>
         </div>
       )}
 
