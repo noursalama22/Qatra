@@ -171,22 +171,29 @@ export default function DriverPortal() {
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
       L.control.zoom({ position: "bottomleft" }).addTo(map);
 
-      const allPoints: [number, number][] = [];
+      const markerPoints: [number, number][] = [];
       tasks.forEach(task => {
         const zone = zones.find(z => z.id === task.zoneId);
         if (!zone?.boundary?.length) return;
-        zone.boundary.forEach(pt => allPoints.push(pt));
+        const pt = centroid(zone.boundary);
+        markerPoints.push(pt);
         const color = task.status === "delivered" ? "#22c55e"
           : task.status === "in_progress" ? "#0891b2"
           : "#f59e0b";
         const statusLabel = task.status === "delivered" ? "مُسلَّم" : task.status === "in_progress" ? "جارية" : "معلقة";
-        L.polygon(zone.boundary, { color, weight: 2.5, fillColor: color, fillOpacity: 0.22 })
-          .bindTooltip(`${zone.name} · ${statusLabel}`, { sticky: true })
+        L.circleMarker(pt, {
+          radius: 14,
+          color: "#fff",
+          weight: 2.5,
+          fillColor: color,
+          fillOpacity: 0.92,
+        })
+          .bindTooltip(`${zone.name} · ${statusLabel}`, { sticky: true, direction: "top" })
           .addTo(map);
       });
 
-      if (allPoints.length) {
-        map.fitBounds(L.latLngBounds(allPoints), { padding: [24, 24] });
+      if (markerPoints.length) {
+        map.fitBounds(L.latLngBounds(markerPoints), { padding: [48, 48] });
       } else {
         map.setView([31.5, 34.45], 12);
       }
