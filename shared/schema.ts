@@ -86,6 +86,7 @@ export const ngosTable = pgTable(
     description: text("description"),
     status: applicationStatusEnum("status").notNull().default("pending"),
     rejectionReason: text("rejection_reason"),
+    walletBudget: numeric("wallet_budget", { precision: 14, scale: 2 }).notNull().default("10000"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },

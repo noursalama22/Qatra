@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { NgoContract, Region, RegionProvider } from "../../api";
 
-const MY_NGO_ID = "seed-n1";
-
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   active: { label: "نشط", cls: "badge-green" },
   pending: { label: "بانتظار الموافقة", cls: "badge-amber" },
@@ -12,9 +10,10 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
 
 type Props = {
   onToast: (msg: string) => void;
+  ngoId: string;
 };
 
-export default function NgoContractsTab({ onToast }: Props) {
+export default function NgoContractsTab({ onToast, ngoId }: Props) {
   const [contracts, setContracts] = useState<NgoContract[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
   const [regionProviders, setRegionProviders] = useState<RegionProvider[]>([]);
@@ -27,9 +26,9 @@ export default function NgoContractsTab({ onToast }: Props) {
   const [dailyQty, setDailyQty] = useState("");
 
   const loadContracts = useCallback(async () => {
-    const res = await fetch(`/api/ngos/${MY_NGO_ID}/contracts`).then(r => r.json());
+    const res = await fetch(`/api/ngos/${ngoId}/contracts`).then(r => r.json());
     setContracts(res.data ?? []);
-  }, []);
+  }, [ngoId]);
 
   const loadRegions = useCallback(async () => {
     const res = await fetch("/api/regions").then(r => r.json());
@@ -67,7 +66,7 @@ export default function NgoContractsTab({ onToast }: Props) {
     if (!selectedRegion || !selectedProvider || qty <= 0) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/ngos/${MY_NGO_ID}/contracts`, {
+      const res = await fetch(`/api/ngos/${ngoId}/contracts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

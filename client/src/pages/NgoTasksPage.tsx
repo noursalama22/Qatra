@@ -2,8 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { parseProviderFromNotes, TASK_STATUS_UI } from "../lib/ngoTaskUtils";
 
-const MY_NGO_ID = "seed-n1";
-
 type Zone = { id: string; name: string };
 type Task = {
   id: string;
@@ -17,7 +15,7 @@ type Task = {
 
 type StatusFilter = "all" | "pending" | "in_progress" | "delivered" | "cancelled";
 
-export default function NgoTasksPage() {
+export default function NgoTasksPage({ ngoId }: { ngoId: string }) {
   const [zones, setZones] = useState<Zone[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,9 +27,9 @@ export default function NgoTasksPage() {
       fetch("/api/tasks").then(r => r.json()),
     ]);
     setZones(zRes.data ?? []);
-    setTasks((tRes.data ?? []).filter((t: Task) => t.ngoId === MY_NGO_ID));
+    setTasks((tRes.data ?? []).filter((t: Task) => t.ngoId === ngoId));
     setLoading(false);
-  }, []);
+  }, [ngoId]);
 
   useEffect(() => {
     load();

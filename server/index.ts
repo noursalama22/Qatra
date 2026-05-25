@@ -62,7 +62,6 @@ const optionalClean = (value: unknown) => {
   const next = clean(value);
   return next || null;
 };
-const NGO_DEFAULT_WALLET_BUDGET = 10000;
 const NGO_FALLBACK_PRICE_PER_LITER = 0.045;
 
 function normalizePhone(raw: unknown) {
@@ -98,6 +97,9 @@ function isTaskFinanciallyApproved(task: { notes: string | null }) {
 }
 
 async function getNgoWallet(ngoId: string) {
+  const [ngo] = await db.select({ walletBudget: ngosTable.walletBudget }).from(ngosTable).where(eq(ngosTable.id, ngoId));
+  const budget = ngo ? Number(ngo.walletBudget) : 10000;
+
   const tasks = await db.select().from(distributionTasksTable).where(eq(distributionTasksTable.ngoId, ngoId));
   const committed = tasks.filter(t => t.status !== "cancelled");
   const spentOrReserved = committed.reduce((sum, task) => sum + taskCost(task), 0);
@@ -106,8 +108,8 @@ async function getNgoWallet(ngoId: string) {
     .reduce((sum, task) => sum + taskCost(task), 0);
 
   return {
-    budget: NGO_DEFAULT_WALLET_BUDGET,
-    available: Math.max(0, NGO_DEFAULT_WALLET_BUDGET - spentOrReserved),
+    budget,
+    available: Math.max(0, budget - spentOrReserved),
     escrow,
     spent: Math.max(0, spentOrReserved - escrow),
   };
@@ -626,6 +628,20 @@ app.get("/api/tasks", async (_req, res) => {
 
 app.get("/api/ngos/:id/wallet", async (req, res) => {
   try {
+    res.json(await getNgoWallet(req.params.id));
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+app.post("/api/ngos/:id/wallet/topup", async (req, res) => {
+  try {
+    const amount = Number(req.body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: "مبلغ الشحن غير صحيح" });
+    }
+    const [ngo] = await db.select({ walletBudget: ngosTable.walletBudget }).from(ngosTable).where(eq(ngosTable.id, req.params.id));
+    if (!ngo) return res.status(404).json({ error: "المنظمة غير موجودة" });
+    const newBudget = Number(ngo.walletBudget) + amount;
+    await db.update(ngosTable).set({ walletBudget: String(newBudget), updatedAt: new Date() }).where(eq(ngosTable.id, req.params.id));
     res.json(await getNgoWallet(req.params.id));
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });

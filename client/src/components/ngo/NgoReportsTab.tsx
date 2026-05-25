@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { NgoReport } from "../../api";
 
-const MY_NGO_ID = "seed-n1";
-
 function formatPeriod(from: string, to: string) {
   const f = new Date(from);
   const t = new Date(to);
@@ -16,23 +14,24 @@ function providerInitials(name: string) {
 
 type Props = {
   onToast: (msg: string) => void;
+  ngoId: string;
 };
 
-export default function NgoReportsTab({ onToast }: Props) {
+export default function NgoReportsTab({ onToast, ngoId }: Props) {
   const [report, setReport] = useState<NgoReport | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/ngos/${MY_NGO_ID}/reports`).then(r => r.json());
+      const res = await fetch(`/api/ngos/${ngoId}/reports`).then(r => r.json());
       setReport(res);
     } catch {
       onToast("تعذّر تحميل التقارير");
     } finally {
       setLoading(false);
     }
-  }, [onToast]);
+  }, [onToast, ngoId]);
 
   useEffect(() => { load(); }, [load]);
 

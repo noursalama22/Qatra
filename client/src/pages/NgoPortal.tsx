@@ -5,7 +5,7 @@ import NgoReportsTab from "../components/ngo/NgoReportsTab";
 import Dashboard from "./Dashboard";
 import NgoTasksPage from "./NgoTasksPage";
 import { isNgoSection } from "../routes";
-import { MY_NGO_ID } from "../lib/zoneMapUtils";
+import { useAppContext } from "../components/RequireRole";
 
 type Zone = {
   id: string; name: string; status: string; populationEstimate: number;
@@ -27,6 +27,10 @@ const PIPELINE_STEPS = [
 const MOCK_DRIVERS = ["أحمد — شاحنة 4022", "محمود — شاحنة 1887", "خالد — شاحنة 3301", "يوسف — شاحنة 2044"];
 
 export default function NgoPortal() {
+  const { user } = useAppContext();
+  const ngoId = (user.profile?.id as string | undefined) ?? "";
+  const orgName = (user.profile?.orgName as string | undefined) ?? "المنظمة الإنسانية";
+
   const { section } = useParams<{ section: string }>();
   const tab = isNgoSection(section) ? section : "dashboard";
   const [zones, setZones] = useState<Zone[]>([]);
@@ -36,15 +40,16 @@ export default function NgoPortal() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
 
   const load = useCallback(async () => {
+    if (!ngoId) return;
     const [z, t, w] = await Promise.all([
       fetch("/api/zones").then(r => r.json()),
       fetch("/api/tasks").then(r => r.json()),
-      fetch(`/api/ngos/${MY_NGO_ID}/wallet`).then(r => r.json()),
+      fetch(`/api/ngos/${ngoId}/wallet`).then(r => r.json()),
     ]);
     setZones(z.data ?? []);
     setTasks(t.data ?? []);
     setWallet({ available: w.available ?? 0, escrow: w.escrow ?? 0 });
-  }, []);
+  }, [ngoId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -69,7 +74,7 @@ export default function NgoPortal() {
       <div className="ngo-header">
         <div className="ngo-header-left">
           <div className="portal-role-badge">المنظمة الإنسانية</div>
-          <h2 className="portal-title">برنامج WASH غزة</h2>
+          <h2 className="portal-title">{orgName}</h2>
           <p className="portal-subtitle">جدولة التوزيع · منع التضارب · ضمان العدالة</p>
         </div>
         <div className="ngo-wallet">
@@ -91,10 +96,10 @@ export default function NgoPortal() {
       </div>
 
       {tab === "dashboard" && (
-        <Dashboard onToast={showToast} wallet={wallet} setWallet={setWallet} />
+        <Dashboard onToast={showToast} wallet={wallet} setWallet={setWallet} ngoId={ngoId} />
       )}
 
-      {tab === "tasks" && <NgoTasksPage />}
+      {tab === "tasks" && <NgoTasksPage ngoId={ngoId} />}
 
       {tab === "pipeline" && (
         <div style={{ padding: "20px 24px" }}>
@@ -192,9 +197,9 @@ export default function NgoPortal() {
         </div>
       )}
 
-      {tab === "contracts" && <NgoContractsTab onToast={showToast} />}
+      {tab === "contracts" && <NgoContractsTab onToast={showToast} ngoId={ngoId} />}
 
-      {tab === "reports" && <NgoReportsTab onToast={showToast} />}
+      {tab === "reports" && <NgoReportsTab onToast={showToast} ngoId={ngoId} />}
     </div>
   );
 }

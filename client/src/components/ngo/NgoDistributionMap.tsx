@@ -11,7 +11,6 @@ import {
   isZoneCovered,
   MapTask,
   MapZone,
-  MY_NGO_ID,
   needLevel,
   regionForZone,
   TIME_SLOTS,
@@ -114,6 +113,7 @@ type Props = {
   wallet: Wallet;
   setWallet: Dispatch<SetStateAction<Wallet>>;
   layout?: "dashboard" | "fullscreen";
+  ngoId: string;
 };
 
 function MapLegend({ className }: { className?: string }) {
@@ -133,6 +133,7 @@ export default function NgoDistributionMap({
   wallet,
   setWallet,
   layout = "dashboard",
+  ngoId,
 }: Props) {
   const isFullscreen = layout === "fullscreen";
   const [searchParams, setSearchParams] = useSearchParams();
@@ -156,7 +157,7 @@ export default function NgoDistributionMap({
   const layerRef = useRef<LayerGroup | null>(null);
 
   const scheduleZone = scheduleZoneId ? zones.find(z => z.id === scheduleZoneId) ?? null : null;
-  const myTasks = tasks.filter(t => t.ngoId === MY_NGO_ID);
+  const myTasks = tasks.filter(t => t.ngoId === ngoId);
   const activeContracts = contracts.filter(c => c.status === "active");
   const dailyCapacity = activeContracts.reduce(
     (sum, c) => sum + parseFloat(c.dailyQuantityLiters || "0"),
@@ -167,7 +168,7 @@ export default function NgoDistributionMap({
     const [zRes, tRes, cRes] = await Promise.all([
       fetch("/api/zones").then(r => r.json()),
       fetch("/api/tasks").then(r => r.json()),
-      fetch(`/api/ngos/${MY_NGO_ID}/contracts`).then(r => r.json()),
+      fetch(`/api/ngos/${ngoId}/contracts`).then(r => r.json()),
     ]);
     const mapZones: ApiMapZone[] = zRes.data ?? [];
     setZones(mapZones.map(z => {
@@ -189,7 +190,7 @@ export default function NgoDistributionMap({
     setTasks(tRes.data ?? []);
     setContracts(cRes.data ?? []);
     setLoading(false);
-  }, []);
+  }, [ngoId]);
 
   useEffect(() => {
     load();
@@ -342,7 +343,7 @@ export default function NgoDistributionMap({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ngoId: MY_NGO_ID,
+        ngoId: ngoId,
         zoneId: scheduleZone.id,
         quantityLiters: String(liters),
         scheduledAt: dt.toISOString(),
@@ -351,7 +352,7 @@ export default function NgoDistributionMap({
       }),
     });
 
-    const walletRes = await fetch(`/api/ngos/${MY_NGO_ID}/wallet`).then(r => r.json());
+    const walletRes = await fetch(`/api/ngos/${ngoId}/wallet`).then(r => r.json());
     setWallet({ available: walletRes.available ?? 0, escrow: walletRes.escrow ?? 0 });
     await load();
     setSubmitting(false);
