@@ -77,6 +77,7 @@ export default function DriverPortal() {
   const [proofPreview, setProofPreview] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [locationError, setLocationError] = useState(false);
+  const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "in_progress" | "delivered">("all");
 
   const mapDivRef = useRef<HTMLDivElement>(null);
   const leafletRef = useRef<LeafletMap | null>(null);
@@ -376,32 +377,107 @@ export default function DriverPortal() {
             </button>
           )}
 
-          <div className="dpwa-list-tasks">
-            {pendingTasks.length === 0 && !inProgressTask && (
-              <div className="dpwa-empty-state">
-                <div className="dpwa-empty-icon">🚛</div>
-                <div className="dpwa-empty-title">لا توجد مهام معلقة</div>
-                <div className="dpwa-empty-sub">ستظهر هنا عند تعيين مهام توزيع جديدة لك</div>
+          {/* Filter tabs */}
+          {(() => {
+            const filters: { key: "all" | "pending" | "in_progress" | "delivered"; label: string; count: number }[] = [
+              { key: "all",         label: "الكل",     count: tasks.length },
+              { key: "pending",     label: "معلقة",    count: tasks.filter(t => t.status === "pending").length },
+              { key: "in_progress", label: "جارية",    count: tasks.filter(t => t.status === "in_progress").length },
+              { key: "delivered",   label: "مُسلَّمة", count: tasks.filter(t => t.status === "delivered").length },
+            ];
+            return (
+              <div style={{ display: "flex", gap: 8, padding: "0 16px 12px", overflowX: "auto" }}>
+                {filters.map(f => (
+                  <button
+                    key={f.key}
+                    onClick={() => setTaskFilter(f.key)}
+                    style={{
+                      flexShrink: 0,
+                      padding: "6px 14px",
+                      borderRadius: 20,
+                      border: taskFilter === f.key ? "none" : "1px solid #d8eef8",
+                      background: taskFilter === f.key ? "#0891b2" : "#f0f9ff",
+                      color: taskFilter === f.key ? "#fff" : "#0369a1",
+                      fontWeight: 700,
+                      fontSize: 13,
+                      fontFamily: "inherit",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    {f.label}
+                    <span style={{
+                      background: taskFilter === f.key ? "rgba(255,255,255,0.25)" : "#bae6fd",
+                      color: taskFilter === f.key ? "#fff" : "#0369a1",
+                      borderRadius: 10,
+                      padding: "1px 7px",
+                      fontSize: 11,
+                      fontWeight: 800,
+                    }}>{f.count}</span>
+                  </button>
+                ))}
               </div>
-            )}
-            {pendingTasks.map(task => {
-              const z = zones.find(zn => zn.id === task.zoneId);
-              return (
-                <button key={task.id} className="dpwa-task-card" onClick={() => acceptTask(task)}>
-                  <div className="dpwa-task-notif-dot" />
-                  <div className="dpwa-task-info">
-                    <div className="dpwa-task-zone">{z?.name ?? task.zoneId}</div>
-                    <div className="dpwa-task-meta">
-                      <span>🚰 {Number(task.quantityLiters).toLocaleString()} لتر</span>
-                      <span>📅 {new Date(task.scheduledAt).toLocaleDateString("ar-SY", { weekday: "short", month: "short", day: "numeric" })}</span>
-                      {z && <span>👥 {(z.populationEstimate ?? 0).toLocaleString()}</span>}
-                    </div>
+            );
+          })()}
+
+          {/* Task list */}
+          {(() => {
+            const filtered = tasks.filter(t =>
+              taskFilter === "all" ? true : t.status === taskFilter
+            );
+            const STATUS_META: Record<string, { label: string; dot: string }> = {
+              pending:     { label: "معلقة",    dot: "#f59e0b" },
+              in_progress: { label: "جارية",    dot: "#0891b2" },
+              delivered:   { label: "مُسلَّمة", dot: "#16a34a" },
+              rejected:    { label: "مرفوضة",   dot: "#dc2626" },
+            };
+            return (
+              <div className="dpwa-list-tasks">
+                {filtered.length === 0 && (
+                  <div className="dpwa-empty-state">
+                    <div className="dpwa-empty-icon">🚛</div>
+                    <div className="dpwa-empty-title">لا توجد مهام</div>
+                    <div className="dpwa-empty-sub">لا توجد مهام بهذه الحالة حالياً</div>
                   </div>
-                  <div className="dpwa-task-chevron">←</div>
-                </button>
-              );
-            })}
-          </div>
+                )}
+                {filtered.map(task => {
+                  const z = zones.find(zn => zn.id === task.zoneId);
+                  const meta = STATUS_META[task.status] ?? { label: task.status, dot: "#94a3b8" };
+                  const isDelivered = task.status === "delivered";
+                  const isInProgress = task.status === "in_progress";
+                  return (
+                    <button
+                      key={task.id}
+                      className="dpwa-task-card"
+                      style={isDelivered ? { opacity: 0.7 } : undefined}
+                      onClick={() => {
+                        if (task.status === "pending") acceptTask(task);
+                        else if (isInProgress) { setActiveTask(task); activeTaskRef.current = task; setStage("navigate"); startGps(); }
+                      }}
+                      disabled={isDelivered}
+                    >
+                      <div className="dpwa-task-notif-dot" style={{ background: meta.dot }} />
+                      <div className="dpwa-task-info">
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span className="dpwa-task-zone">{z?.name ?? task.zoneId}</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: meta.dot, background: `${meta.dot}18`, borderRadius: 10, padding: "2px 8px" }}>{meta.label}</span>
+                        </div>
+                        <div className="dpwa-task-meta">
+                          <span>🚰 {Number(task.quantityLiters).toLocaleString()} لتر</span>
+                          <span>📅 {new Date(task.scheduledAt).toLocaleDateString("ar-SY", { weekday: "short", month: "short", day: "numeric" })}</span>
+                          {z && <span>👥 {(z.populationEstimate ?? 0).toLocaleString()}</span>}
+                        </div>
+                      </div>
+                      {!isDelivered && <div className="dpwa-task-chevron">←</div>}
+                      {isDelivered && <div style={{ fontSize: 18 }}>✅</div>}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
 
