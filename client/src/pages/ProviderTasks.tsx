@@ -702,13 +702,6 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
   return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-const CITIZEN_DRIVER_PHOTOS = [
-  { label: "صورة عداد الخزان",   url: "https://picsum.photos/seed/meter42/400/300" },
-  { label: "صورة مستوى المياه",  url: "https://picsum.photos/seed/water99/400/300" },
-];
-const ORG_DRIVER_PHOTOS = [
-  { label: "صورة من مكان التسليم", url: "https://picsum.photos/seed/delivery77/400/300" },
-];
 
 type ApproveTarget = {
   taskId: string;
@@ -722,6 +715,7 @@ type ApproveTarget = {
   partyName: string;
   driverGps: [number, number];
   destGps: [number, number];
+  deliveryPhotos: string[];
 };
 
 function ApproveModal({
@@ -739,10 +733,10 @@ function ApproveModal({
   const [rejectReason, setRejectReason] = useState("");
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
-  const driverPhotos = target.contractType === "citizen" ? CITIZEN_DRIVER_PHOTOS : ORG_DRIVER_PHOTOS;
+  const driverPhotos = target.deliveryPhotos;
   const distance = haversineMeters(target.driverGps[0], target.driverGps[1], target.destGps[0], target.destGps[1]);
   const locationOk = distance <= 200;
-  const canApprove = locationOk && driverPhotos.length > 0;
+  const canApprove = locationOk;
 
   const sectionLabel: React.CSSProperties = { fontSize: 10, color: "#0284c7", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 };
   const card: React.CSSProperties = { background: "#f8fcff", border: "0.5px solid #d8eef8", borderRadius: 10, padding: "14px 14px" };
@@ -758,7 +752,7 @@ function ApproveModal({
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
-          <div style={{ background: "linear-gradient(135deg, #14532d 0%, #16a34a 100%)", padding: "18px 22px", color: "#fff", position: "relative", flexShrink: 0 }}>
+          <div style={{ background: "linear-gradient(135deg, #0f3f5c 0%, #0891b2 100%)", padding: "18px 22px", color: "#fff", position: "relative", flexShrink: 0 }}>
             <button
               onClick={onClose}
               style={{ position: "absolute", top: 13, left: 14, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 28, height: 28, color: "#fff", cursor: "pointer", fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}
@@ -819,25 +813,31 @@ function ApproveModal({
             {/* Driver photos — read-only */}
             <div>
               <div style={sectionLabel}>صور التسليم — مُرفوعة من السائق</div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                {driverPhotos.map((p, i) => (
-                  <div key={i} style={{ flex: 1, minWidth: 170, border: "0.5px solid #d8eef8", borderRadius: 10, overflow: "hidden", background: "#f8fcff" }}>
-                    <img
-                      src={p.url}
-                      alt={p.label}
-                      style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }}
-                    />
-                    <div style={{ padding: "8px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "#12384f" }}>{p.label}</span>
-                      <button
-                        type="button"
-                        onClick={() => setLightboxSrc(p.url)}
-                        style={{ fontSize: 10, padding: "3px 8px", border: "0.5px solid #0284c7", borderRadius: 6, color: "#0284c7", background: "#f0f9ff", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, whiteSpace: "nowrap" }}
-                      >عرض كامل</button>
+              {driverPhotos.length === 0 ? (
+                <div style={{ background: "#f8fcff", border: "0.5px solid #d8eef8", borderRadius: 10, padding: "18px 14px", textAlign: "center", color: "#8eb5c8", fontSize: 12, fontWeight: 600 }}>
+                  لم يرفع السائق صوراً بعد
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {driverPhotos.map((url, i) => (
+                    <div key={i} style={{ flex: 1, minWidth: 170, border: "0.5px solid #d8eef8", borderRadius: 10, overflow: "hidden", background: "#f8fcff" }}>
+                      <img
+                        src={url}
+                        alt={`صورة التسليم ${i + 1}`}
+                        style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }}
+                      />
+                      <div style={{ padding: "8px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#12384f" }}>صورة {i + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => setLightboxSrc(url)}
+                          style={{ fontSize: 10, padding: "3px 8px", border: "0.5px solid #0284c7", borderRadius: 6, color: "#0284c7", background: "#f0f9ff", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, whiteSpace: "nowrap" }}
+                        >عرض كامل</button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Rejection reason panel */}
@@ -880,7 +880,7 @@ function ApproveModal({
                   disabled={!canApprove}
                   onClick={onApprove}
                   title={!locationOk ? "لا يمكن التأكيد: الموقع غير مطابق" : ""}
-                  style={{ flex: 2, padding: "11px 0", border: "none", borderRadius: 8, background: canApprove ? "#16a34a" : "#e2e8f0", color: canApprove ? "#fff" : "#94a3b8", fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: canApprove ? "pointer" : "not-allowed", transition: "all 0.15s" }}
+                  style={{ flex: 2, padding: "11px 0", border: "none", borderRadius: 8, background: canApprove ? "#0891b2" : "#e2e8f0", color: canApprove ? "#fff" : "#94a3b8", fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: canApprove ? "pointer" : "not-allowed", transition: "all 0.15s" }}
                 >✓ تأكيد الاستلام</button>
               </>
             ) : (
@@ -1439,7 +1439,7 @@ export default function ProviderTasks() {
                               } else if (action === "track" && task.driver) {
                                 setTrackTarget({ label: task.tripNumber, region: task.region, quantity: task.quantityLiters, driver: task.driver, timeline: task.timeline });
                               } else if (action === "approve") {
-                                setApproveTarget({ taskId: task.id, type: "ngo", contractType: "organization", label: task.tripNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.orgName, driverGps: [31.502, 34.471], destGps: [31.501, 34.470] });
+                                setApproveTarget({ taskId: task.id, type: "ngo", contractType: "organization", label: task.tripNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.orgName, driverGps: [31.502, 34.471], destGps: [31.501, 34.470], deliveryPhotos: task.deliveryPhotos });
                               } else {
                                 setSelectedNgoTask(task);
                               }
@@ -1532,7 +1532,7 @@ export default function ProviderTasks() {
                               } else if (action === "track" && task.driver) {
                                 setTrackTarget({ label: task.orderNumber, region: task.region, quantity: task.quantityLiters, driver: task.driver, timeline: task.timeline });
                               } else if (action === "approve") {
-                                setApproveTarget({ taskId: task.id, type: "citizen", contractType: "citizen", label: task.orderNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.citizenName, driverGps: [31.502, 34.471], destGps: [31.501, 34.470] });
+                                setApproveTarget({ taskId: task.id, type: "citizen", contractType: "citizen", label: task.orderNumber, region: task.region, quantity: task.quantityLiters, date: task.date, driver: task.driver, partyName: task.citizenName, driverGps: [31.502, 34.471], destGps: [31.501, 34.470], deliveryPhotos: task.deliveryPhotos });
                               } else {
                                 setSelectedCitTask(task);
                               }
@@ -1566,6 +1566,7 @@ export default function ProviderTasks() {
               partyName: selectedNgoTask.orgName,
               driverGps: [31.502, 34.471],
               destGps: [31.501, 34.470],
+              deliveryPhotos: selectedNgoTask.deliveryPhotos,
             });
           }}
         />
