@@ -423,7 +423,7 @@ export default function DriverPortal() {
           <div style={{ display: "flex", flex: 1, overflow: "hidden", direction: "rtl" }}>
 
             {/* RIGHT column — cards list (RTL start) */}
-            <div style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", borderLeft: "1.5px solid #e0f2fe", background: "#f8faff", overflow: "hidden" }}>
+            <div style={{ flex: "0 0 50%", display: "flex", flexDirection: "column", borderLeft: "1.5px solid #e0f2fe", background: "#f8faff", overflow: "hidden" }}>
 
               {/* Filter tabs */}
               {(() => {
