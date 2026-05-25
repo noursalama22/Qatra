@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { Map as LeafletMap, Marker, Polygon } from "leaflet";
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
 import "leaflet/dist/leaflet.css";
 import { useAppContext, type AuthUser } from "../components/RequireRole";
 
@@ -78,6 +83,8 @@ export default function DriverPortal() {
   const [completing, setCompleting] = useState(false);
   const [locationError, setLocationError] = useState(false);
   const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "in_progress" | "delivered">("all");
+  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
 
   const mapDivRef = useRef<HTMLDivElement>(null);
   const leafletRef = useRef<LeafletMap | null>(null);
@@ -145,11 +152,17 @@ export default function DriverPortal() {
 
     const goOnline = () => { setIsOnline(true); syncOfflineQueue(); };
     const goOffline = () => setIsOnline(false);
+    const onInstallPrompt = (e: Event) => { e.preventDefault(); setInstallPrompt(e); setShowInstallBtn(true); };
+    const onAppInstalled = () => setShowInstallBtn(false);
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
+    window.addEventListener("beforeinstallprompt", onInstallPrompt);
+    window.addEventListener("appinstalled", onAppInstalled);
     return () => {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
+      window.removeEventListener("beforeinstallprompt", onInstallPrompt);
+      window.removeEventListener("appinstalled", onAppInstalled);
       stopGps();
     };
   }, [loadTasks, loadOfflineCount, syncOfflineQueue]);
@@ -402,8 +415,30 @@ export default function DriverPortal() {
                   {profile?.vehicleType ?? "شاحنة مياه"} · {providerLabel}
                 </div>
               </div>
-              <div className={`dpwa-gps-badge ${gpsPos ? "dpwa-gps-on" : "dpwa-gps-off"}`}>
-                {gpsPos ? "● GPS نشط" : "○ GPS مُعطَّل"}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                <div className={`dpwa-gps-badge ${gpsPos ? "dpwa-gps-on" : "dpwa-gps-off"}`}>
+                  {gpsPos ? "● GPS نشط" : "○ GPS مُعطَّل"}
+                </div>
+                {showInstallBtn && (
+                  <button
+                    onClick={async () => {
+                      if (!installPrompt) return;
+                      const prompt = installPrompt as BeforeInstallPromptEvent;
+                      await prompt.prompt();
+                      const { outcome } = await prompt.userChoice;
+                      if (outcome === "accepted") setShowInstallBtn(false);
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5,
+                      background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.5)",
+                      borderRadius: 20, padding: "5px 12px", color: "#fff",
+                      fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+                      backdropFilter: "blur(4px)",
+                    }}
+                  >
+                    <span style={{ fontSize: 14 }}>📲</span> تثبيت التطبيق
+                  </button>
+                )}
               </div>
             </div>
             <div className="dpwa-list-stats">

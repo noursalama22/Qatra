@@ -7,30 +7,48 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icons/icon.svg"],
+      includeAssets: ["icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png"],
       manifest: {
-        name: "قطرة — بوابة المواطن",
+        name: "قطرة — منصة توزيع المياه",
         short_name: "قطرة",
-        description: "منصة توزيع المياه الذكية للمواطنين",
+        description: "منصة توزيع المياه الذكية — بوابة السائق والمواطن",
         theme_color: "#0369a1",
         background_color: "#f3fbff",
         display: "standalone",
         orientation: "portrait-primary",
         lang: "ar",
         dir: "rtl",
-        start_url: "/citizen",
+        start_url: "/driver",
         scope: "/",
         icons: [
+          {
+            src: "/icons/icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icons/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icons/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
           {
             src: "/icons/icon.svg",
             sizes: "any",
             type: "image/svg+xml",
-            purpose: "any maskable",
+            purpose: "any",
           },
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,svg,woff2}"],
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -46,6 +64,32 @@ export default defineConfig({
             options: {
               cacheName: "gstatic-fonts-cache",
               expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/[a-z]\.tile\.openstreetmap\.org\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "osm-tiles-cache",
+              expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: /\/api\/driver\/.*/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "driver-api-cache",
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
+            },
+          },
+          {
+            urlPattern: /\/api\/zones.*/i,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "zones-cache",
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 },
             },
           },
           {
