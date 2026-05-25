@@ -61,7 +61,7 @@ export default function NgoPortal() {
 
   const totalSignals = zones.reduce((s, z) => s + (z.signalCount ?? 0), 0);
   const activeTasks = tasks.filter(t => t.status === "in_progress" || t.status === "pending");
-  const deliveredTasks = tasks.filter(t => t.status === "delivered");
+  const deliveredTasks = tasks.filter(t => t.status === "delivered" && !/approvedAt:/.test(t.notes ?? ""));
 
   if (!isNgoSection(section)) {
     return <Navigate to="/ngo/dashboard" replace />;
