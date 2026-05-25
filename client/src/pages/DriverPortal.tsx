@@ -81,6 +81,8 @@ export default function DriverPortal() {
 
   const mapDivRef = useRef<HTMLDivElement>(null);
   const leafletRef = useRef<LeafletMap | null>(null);
+  const dashMapDivRef = useRef<HTMLDivElement>(null);
+  const dashLeafletRef = useRef<LeafletMap | null>(null);
   const driverMarkerRef = useRef<Marker | null>(null);
   const zonePolyRef = useRef<Polygon | null>(null);
   const gpsPosRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -154,6 +156,50 @@ export default function DriverPortal() {
 
   useEffect(() => { gpsPosRef.current = gpsPos; }, [gpsPos]);
   useEffect(() => { activeTaskRef.current = activeTask; }, [activeTask]);
+
+  // ── Dashboard overview map (list stage) ────────────────────────
+  useEffect(() => {
+    if (stage !== "list") {
+      if (dashLeafletRef.current) { dashLeafletRef.current.remove(); dashLeafletRef.current = null; }
+      return;
+    }
+    const timer = setTimeout(async () => {
+      if (!dashMapDivRef.current) return;
+      if (dashLeafletRef.current) { dashLeafletRef.current.remove(); dashLeafletRef.current = null; }
+      const L = (await import("leaflet")).default;
+      const map = L.map(dashMapDivRef.current, { zoomControl: false, attributionControl: false });
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+      L.control.zoom({ position: "bottomleft" }).addTo(map);
+
+      const allPoints: [number, number][] = [];
+      tasks.forEach(task => {
+        const zone = zones.find(z => z.id === task.zoneId);
+        if (!zone?.boundary?.length) return;
+        zone.boundary.forEach(pt => allPoints.push(pt));
+        const color = task.status === "delivered" ? "#22c55e"
+          : task.status === "in_progress" ? "#0891b2"
+          : "#f59e0b";
+        const statusLabel = task.status === "delivered" ? "مُسلَّم" : task.status === "in_progress" ? "جارية" : "معلقة";
+        L.polygon(zone.boundary, { color, weight: 2.5, fillColor: color, fillOpacity: 0.22 })
+          .bindTooltip(`${zone.name} · ${statusLabel}`, { sticky: true })
+          .addTo(map);
+      });
+
+      if (allPoints.length) {
+        map.fitBounds(L.latLngBounds(allPoints), { padding: [24, 24] });
+      } else {
+        map.setView([31.5, 34.45], 12);
+      }
+
+      if (gpsPosRef.current) {
+        const icon = L.divIcon({ html: `<div class="dpwa-driver-dot"></div>`, iconSize: [18, 18], className: "" });
+        L.marker([gpsPosRef.current.lat, gpsPosRef.current.lng], { icon }).addTo(map);
+      }
+
+      dashLeafletRef.current = map;
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [stage, tasks, zones]);
 
   useEffect(() => {
     if (stage !== "navigate") {
@@ -362,6 +408,17 @@ export default function DriverPortal() {
                 <div className="dpwa-stat"><span className="dpwa-stat-val dpwa-stat-warn">{offlineCount}</span><span className="dpwa-stat-lbl">مزامنة</span></div></>
               )}
             </div>
+          </div>
+
+          {/* ── Dashboard map ── */}
+          <div style={{ margin: "12px 16px 0", borderRadius: 14, overflow: "hidden", border: "1.5px solid #e0f2fe", boxShadow: "0 2px 8px rgba(8,145,178,0.07)" }}>
+            {/* Legend */}
+            <div dir="rtl" style={{ display: "flex", gap: 14, padding: "8px 14px", background: "#f0f9ff", borderBottom: "1px solid #e0f2fe", fontSize: 11, fontWeight: 600, color: "#475569" }}>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: "#f59e0b", marginLeft: 4 }} />معلقة</span>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: "#0891b2", marginLeft: 4 }} />جارية</span>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: "#22c55e", marginLeft: 4 }} />مُسلَّمة</span>
+            </div>
+            <div ref={dashMapDivRef} style={{ height: 220 }} />
           </div>
 
           {/* ── Filter tabs ── */}
