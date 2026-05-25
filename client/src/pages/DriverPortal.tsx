@@ -463,6 +463,7 @@ export default function DriverPortal() {
                   return (
                     <button
                       key={task.id}
+                      dir="rtl"
                       disabled={!clickable}
                       onClick={() => {
                         if (isPending) acceptTask(task);
@@ -486,7 +487,7 @@ export default function DriverPortal() {
                         transition: "box-shadow 0.15s, border-color 0.15s",
                       }}
                     >
-                      {/* Right icon (RTL start) */}
+                      {/* Icon — RTL start = right */}
                       <div style={{
                         width: 44, height: 44, borderRadius: 12, flexShrink: 0,
                         background: meta.bg, border: `1px solid ${meta.border}`,
@@ -497,8 +498,8 @@ export default function DriverPortal() {
                       </div>
 
                       {/* Info */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                      <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 8, marginBottom: 5 }}>
                           <span style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {z?.name ?? task.zoneId}
                           </span>
@@ -508,7 +509,7 @@ export default function DriverPortal() {
                             borderRadius: 10, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
                           }}>{meta.label}</span>
                         </div>
-                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", justifyContent: "flex-start", gap: 10, flexWrap: "wrap" }}>
                           <span style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>
                             🚰 {Number(task.quantityLiters).toLocaleString()} لتر
                           </span>
@@ -523,7 +524,7 @@ export default function DriverPortal() {
                         </div>
                       </div>
 
-                      {/* Chevron on left (RTL end) */}
+                      {/* Chevron — RTL end = left */}
                       {clickable && (
                         <div style={{ color: "#0891b2", fontSize: 18, flexShrink: 0, fontWeight: 700 }}>←</div>
                       )}
