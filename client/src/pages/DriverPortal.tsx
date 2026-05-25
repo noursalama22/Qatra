@@ -76,6 +76,7 @@ export default function DriverPortal() {
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
+  const [locationError, setLocationError] = useState(false);
 
   const mapDivRef = useRef<HTMLDivElement>(null);
   const leafletRef = useRef<LeafletMap | null>(null);
@@ -271,6 +272,7 @@ export default function DriverPortal() {
       const dist = haversineMeters(gps.lat, gps.lng, cLat, cLng);
       if (dist > 200) {
         showToast(`📍 الموقع غير مطابق — أنت على بُعد ${dist} متر من نقطة التسليم. لا يمكن إتمام العملية.`);
+        setLocationError(true);
         return;
       }
     }
@@ -584,6 +586,15 @@ export default function DriverPortal() {
                   {completing ? "⟳ جارٍ الحفظ والرفع..." : "✓ إغلاق المهمة بنجاح"}
                 </button>
                 {!proofFile && <div className="dpwa-proof-required-note">الصورة مطلوبة قبل إغلاق المهمة</div>}
+                {locationError && (
+                  <button
+                    className="dpwa-btn"
+                    style={{ marginTop: 10, background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", fontWeight: 700, fontSize: 14 }}
+                    onClick={() => { setLocationError(false); backToList(); }}
+                  >
+                    ← العودة لقائمة المهام
+                  </button>
+                )}
               </div>
             </div>
           )}
